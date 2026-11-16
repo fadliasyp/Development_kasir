@@ -1,0 +1,862 @@
+===== FILE PROTOKOL LISENSI =====
+
+===== C:\Development\projects\kasir_offline\lib\features\license\domain\license_models.dart =====
+import 'dart:convert';
+
+class LicenseConstants {
+  const LicenseConstants._();
+
+  static const int activationSchemaVersion = 1;
+  static const int licenseSchemaVersion = 1;
+
+  static const String applicationId = 'kasir_offline';
+
+  static const String licenseTokenPrefix = 'KSL1';
+
+  static const String installationIdKey = 'license.installation_id';
+
+  static const String licenseTokenKey = 'license.token';
+}
+
+class InstallationIdentity {
+  const InstallationIdentity({required this.installationId});
+
+  final String installationId;
+}
+
+class ActivationRequest {
+  const ActivationRequest({
+    required this.schemaVersion,
+    required this.applicationId,
+    required this.installationId,
+    required this.createdAt,
+  });
+
+  final int schemaVersion;
+  final String applicationId;
+  final String installationId;
+  final DateTime createdAt;
+
+  Map<String, Object> toJson() {
+    return <String, Object>{
+      'schemaVersion': schemaVersion,
+      'applicationId': applicationId,
+      'installationId': installationId,
+      'createdAt': createdAt.toUtc().toIso8601String(),
+    };
+  }
+
+  String toCanonicalJson() {
+    return jsonEncode(toJson());
+  }
+
+  factory ActivationRequest.fromJson(Map<String, dynamic> json) {
+    final schemaVersion = json['schemaVersion'];
+
+    final applicationId = json['applicationId'];
+
+    final installationId = json['installationId'];
+
+    final createdAt = json['createdAt'];
+
+    if (schemaVersion is! int ||
+        applicationId is! String ||
+        installationId is! String ||
+        createdAt is! String) {
+      throw const LicenseException('Data permintaan aktivasi tidak valid.');
+    }
+
+    final parsedCreatedAt = DateTime.tryParse(createdAt);
+
+    if (parsedCreatedAt == null) {
+      throw const LicenseException('Waktu permintaan aktivasi tidak valid.');
+    }
+
+    return ActivationRequest(
+      schemaVersion: schemaVersion,
+      applicationId: applicationId,
+      installationId: installationId,
+      createdAt: parsedCreatedAt.toUtc(),
+    );
+  }
+}
+
+class GeneratedActivationRequest {
+  const GeneratedActivationRequest({
+    required this.request,
+    required this.encodedRequest,
+    required this.requestCode,
+  });
+
+  final ActivationRequest request;
+  final String encodedRequest;
+  final String requestCode;
+}
+
+class LicensePayload {
+  LicensePayload({
+    required this.schemaVersion,
+    required this.applicationId,
+    required this.licenseId,
+    required this.installationId,
+    required this.storeName,
+    required this.issuedAt,
+    required this.expiresAt,
+    required List<String> features,
+  }) : features = List<String>.unmodifiable(features);
+
+  final int schemaVersion;
+  final String applicationId;
+  final String licenseId;
+  final String installationId;
+  final String storeName;
+  final DateTime issuedAt;
+  final DateTime expiresAt;
+  final List<String> features;
+
+  Map<String, Object> toJson() {
+    return <String, Object>{
+      'schemaVersion': schemaVersion,
+      'applicationId': applicationId,
+      'licenseId': licenseId,
+      'installationId': installationId,
+      'storeName': storeName,
+      'issuedAt': issuedAt.toUtc().toIso8601String(),
+      'expiresAt': expiresAt.toUtc().toIso8601String(),
+      'features': features,
+    };
+  }
+
+  String toCanonicalJson() {
+    return jsonEncode(toJson());
+  }
+
+  factory LicensePayload.fromJson(Map<String, dynamic> json) {
+    final schemaVersion = json['schemaVersion'];
+
+    final applicationId = json['applicationId'];
+
+    final licenseId = json['licenseId'];
+
+    final installationId = json['installationId'];
+
+    final storeName = json['storeName'];
+
+    final issuedAt = json['issuedAt'];
+
+    final expiresAt = json['expiresAt'];
+
+    final rawFeatures = json['features'];
+
+    if (schemaVersion is! int ||
+        applicationId is! String ||
+        licenseId is! String ||
+        installationId is! String ||
+        storeName is! String ||
+        issuedAt is! String ||
+        expiresAt is! String ||
+        rawFeatures is! List) {
+      throw const LicenseException('Isi lisensi tidak valid.');
+    }
+
+    final features = <String>[];
+
+    for (final feature in rawFeatures) {
+      if (feature is! String || feature.trim().isEmpty) {
+        throw const LicenseException('Daftar fitur lisensi tidak valid.');
+      }
+
+      features.add(feature.trim());
+    }
+
+    final parsedIssuedAt = DateTime.tryParse(issuedAt);
+
+    final parsedExpiresAt = DateTime.tryParse(expiresAt);
+
+    if (parsedIssuedAt == null || parsedExpiresAt == null) {
+      throw const LicenseException('Tanggal lisensi tidak valid.');
+    }
+
+    if (applicationId.trim().isEmpty ||
+        licenseId.trim().isEmpty ||
+        installationId.trim().isEmpty ||
+        storeName.trim().isEmpty) {
+      throw const LicenseException('Informasi lisensi tidak lengkap.');
+    }
+
+    if (!parsedExpiresAt.isAfter(parsedIssuedAt)) {
+      throw const LicenseException('Masa berlaku lisensi tidak valid.');
+    }
+
+    return LicensePayload(
+      schemaVersion: schemaVersion,
+      applicationId: applicationId.trim(),
+      licenseId: licenseId.trim(),
+      installationId: installationId.trim(),
+      storeName: storeName.trim(),
+      issuedAt: parsedIssuedAt.toUtc(),
+      expiresAt: parsedExpiresAt.toUtc(),
+      features: features,
+    );
+  }
+}
+
+enum LicenseValidationStatus {
+  valid,
+  malformed,
+  invalidSignature,
+  wrongApplication,
+  unsupportedVersion,
+  wrongInstallation,
+  notYetValid,
+  expired,
+}
+
+class LicenseValidationResult {
+  const LicenseValidationResult._({
+    required this.status,
+    required this.message,
+    this.payload,
+  });
+
+  factory LicenseValidationResult.valid(LicensePayload payload) {
+    return LicenseValidationResult._(
+      status: LicenseValidationStatus.valid,
+      message: 'Lisensi valid.',
+      payload: payload,
+    );
+  }
+
+  factory LicenseValidationResult.invalid({
+    required LicenseValidationStatus status,
+    required String message,
+  }) {
+    return LicenseValidationResult._(status: status, message: message);
+  }
+
+  final LicenseValidationStatus status;
+  final String message;
+  final LicensePayload? payload;
+
+  bool get isValid => status == LicenseValidationStatus.valid;
+}
+
+class StoredLicense {
+  const StoredLicense({required this.token});
+
+  final String token;
+}
+
+class LicenseException implements Exception {
+  const LicenseException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
+===== C:\Development\projects\kasir_offline\lib\features\license\services\activation_request_service.dart =====
+import 'dart:convert';
+
+import 'package:cryptography/cryptography.dart';
+import 'package:kasir_offline/features/license/domain/license_models.dart';
+import 'package:kasir_offline/features/license/services/installation_identity_service.dart';
+
+class ActivationRequestService {
+  ActivationRequestService(
+    this._identityService, {
+    DateTime Function()? now,
+    HashAlgorithm? hashAlgorithm,
+  }) : _now = now ?? DateTime.now,
+       _hashAlgorithm = hashAlgorithm ?? Sha256();
+
+  final InstallationIdentityService _identityService;
+
+  final DateTime Function() _now;
+  final HashAlgorithm _hashAlgorithm;
+
+  Future<GeneratedActivationRequest> generate() async {
+    final identity = await _identityService.getOrCreateIdentity();
+
+    final request = ActivationRequest(
+      schemaVersion: LicenseConstants.activationSchemaVersion,
+      applicationId: LicenseConstants.applicationId,
+      installationId: identity.installationId,
+      createdAt: _now().toUtc(),
+    );
+
+    final canonicalJson = request.toCanonicalJson();
+
+    final encodedRequest = base64Url
+        .encode(utf8.encode(canonicalJson))
+        .replaceAll('=', '');
+
+    final digest = await _hashAlgorithm.hash(utf8.encode(encodedRequest));
+
+    final requestCode = _formatRequestCode(digest.bytes);
+
+    return GeneratedActivationRequest(
+      request: request,
+      encodedRequest: encodedRequest,
+      requestCode: requestCode,
+    );
+  }
+
+  ActivationRequest decode(String encodedRequest) {
+    final cleaned = encodedRequest.replaceAll(RegExp(r'\s+'), '').trim();
+
+    if (cleaned.isEmpty) {
+      throw const LicenseException('Data permintaan aktivasi kosong.');
+    }
+
+    try {
+      final normalized = base64Url.normalize(cleaned);
+
+      final decodedBytes = base64Url.decode(normalized);
+
+      final jsonValue = jsonDecode(utf8.decode(decodedBytes));
+
+      if (jsonValue is! Map<String, dynamic>) {
+        throw const LicenseException('Format permintaan aktivasi tidak valid.');
+      }
+
+      final request = ActivationRequest.fromJson(jsonValue);
+
+      if (request.applicationId != LicenseConstants.applicationId) {
+        throw const LicenseException(
+          'Permintaan bukan berasal dari aplikasi ini.',
+        );
+      }
+
+      if (request.schemaVersion != LicenseConstants.activationSchemaVersion) {
+        throw const LicenseException(
+          'Versi permintaan aktivasi tidak didukung.',
+        );
+      }
+
+      return request;
+    } on LicenseException {
+      rethrow;
+    } on Object {
+      throw const LicenseException('Data permintaan aktivasi rusak.');
+    }
+  }
+
+  String _formatRequestCode(List<int> bytes) {
+    final firstEightBytes = bytes.take(8);
+
+    final hex = firstEightBytes
+        .map((byte) => byte.toRadixString(16).padLeft(2, '0'))
+        .join()
+        .toUpperCase();
+
+    return <String>[
+      hex.substring(0, 4),
+      hex.substring(4, 8),
+      hex.substring(8, 12),
+      hex.substring(12, 16),
+    ].join('-');
+  }
+}
+
+===== C:\Development\projects\kasir_offline\lib\features\license\services\license_signature_verifier.dart =====
+import 'dart:convert';
+
+import 'package:cryptography/cryptography.dart';
+
+abstract interface class LicenseSignatureVerifier {
+  Future<bool> verify({
+    required List<int> message,
+    required List<int> signatureBytes,
+  });
+}
+
+class Ed25519LicenseSignatureVerifier implements LicenseSignatureVerifier {
+  Ed25519LicenseSignatureVerifier(this._publicKey, {Ed25519? algorithm})
+    : _algorithm = algorithm ?? Ed25519();
+
+  factory Ed25519LicenseSignatureVerifier.fromBase64Url(
+    String encodedPublicKey,
+  ) {
+    try {
+      final publicKeyBytes = base64Url.decode(
+        base64Url.normalize(encodedPublicKey.trim()),
+      );
+
+      if (publicKeyBytes.length != 32) {
+        throw const FormatException('Public key harus berukuran 32 byte.');
+      }
+
+      return Ed25519LicenseSignatureVerifier(
+        SimplePublicKey(publicKeyBytes, type: KeyPairType.ed25519),
+      );
+    } on FormatException catch (error) {
+      throw StateError(
+        'Konfigurasi public key lisensi tidak valid: '
+        '${error.message}',
+      );
+    }
+  }
+
+  final SimplePublicKey _publicKey;
+  final Ed25519 _algorithm;
+
+  @override
+  Future<bool> verify({
+    required List<int> message,
+    required List<int> signatureBytes,
+  }) async {
+    try {
+      final signature = Signature(signatureBytes, publicKey: _publicKey);
+
+      return await _algorithm.verify(message, signature: signature);
+    } on Object {
+      return false;
+    }
+  }
+}
+
+===== C:\Development\projects\kasir_offline\lib\features\license\services\license_token_codec.dart =====
+import 'dart:convert';
+
+import 'package:kasir_offline/features/license/domain/license_models.dart';
+
+class LicenseTokenDraft {
+  LicenseTokenDraft({
+    required this.payloadSegment,
+    required List<int> signedMessage,
+  }) : signedMessage = List<int>.unmodifiable(signedMessage);
+
+  final String payloadSegment;
+  final List<int> signedMessage;
+}
+
+class DecodedLicenseToken {
+  DecodedLicenseToken({
+    required this.payload,
+    required List<int> signedMessage,
+    required List<int> signatureBytes,
+  }) : signedMessage = List<int>.unmodifiable(signedMessage),
+       signatureBytes = List<int>.unmodifiable(signatureBytes);
+
+  final LicensePayload payload;
+  final List<int> signedMessage;
+  final List<int> signatureBytes;
+}
+
+class LicenseTokenCodec {
+  LicenseTokenDraft createDraft(LicensePayload payload) {
+    final payloadBytes = utf8.encode(payload.toCanonicalJson());
+
+    final payloadSegment = _base64UrlWithoutPadding(payloadBytes);
+
+    final signedMessage = utf8.encode(
+      '${LicenseConstants.licenseTokenPrefix}.'
+      '$payloadSegment',
+    );
+
+    return LicenseTokenDraft(
+      payloadSegment: payloadSegment,
+      signedMessage: signedMessage,
+    );
+  }
+
+  String assemble({
+    required LicenseTokenDraft draft,
+    required List<int> signatureBytes,
+  }) {
+    if (signatureBytes.isEmpty) {
+      throw const LicenseException('Tanda tangan lisensi kosong.');
+    }
+
+    final signatureSegment = _base64UrlWithoutPadding(signatureBytes);
+
+    return '${LicenseConstants.licenseTokenPrefix}.'
+        '${draft.payloadSegment}.'
+        '$signatureSegment';
+  }
+
+  DecodedLicenseToken decode(String token) {
+    final cleaned = token.replaceAll(RegExp(r'\s+'), '').trim();
+
+    if (cleaned.isEmpty) {
+      throw const LicenseException('Kode lisensi kosong.');
+    }
+
+    final parts = cleaned.split('.');
+
+    if (parts.length != 3) {
+      throw const LicenseException('Format kode lisensi tidak valid.');
+    }
+
+    final prefix = parts[0];
+    final payloadSegment = parts[1];
+    final signatureSegment = parts[2];
+
+    if (prefix != LicenseConstants.licenseTokenPrefix) {
+      throw const LicenseException('Versi kode lisensi tidak dikenali.');
+    }
+
+    if (payloadSegment.isEmpty || signatureSegment.isEmpty) {
+      throw const LicenseException('Kode lisensi tidak lengkap.');
+    }
+
+    try {
+      final payloadBytes = base64Url.decode(
+        base64Url.normalize(payloadSegment),
+      );
+
+      final decodedJson = jsonDecode(utf8.decode(payloadBytes));
+
+      if (decodedJson is! Map<String, dynamic>) {
+        throw const LicenseException('Isi kode lisensi tidak valid.');
+      }
+
+      final payload = LicensePayload.fromJson(decodedJson);
+
+      final signatureBytes = base64Url.decode(
+        base64Url.normalize(signatureSegment),
+      );
+
+      final signedMessage = utf8.encode('$prefix.$payloadSegment');
+
+      return DecodedLicenseToken(
+        payload: payload,
+        signedMessage: signedMessage,
+        signatureBytes: signatureBytes,
+      );
+    } on LicenseException {
+      rethrow;
+    } on Object {
+      throw const LicenseException(
+        'Kode lisensi rusak atau tidak dapat dibaca.',
+      );
+    }
+  }
+
+  String _base64UrlWithoutPadding(List<int> bytes) {
+    return base64Url.encode(bytes).replaceAll('=', '');
+  }
+}
+
+===== C:\Development\projects\kasir_offline\tool\license_issuer.dart =====
+import 'dart:convert';
+
+import 'package:cryptography/cryptography.dart';
+import 'package:kasir_offline/features/license/domain/license_models.dart';
+import 'package:kasir_offline/features/license/services/license_token_codec.dart';
+
+class LicenseIssuerKeyMaterial {
+  LicenseIssuerKeyMaterial({
+    required List<int> privateKeyBytes,
+    required List<int> publicKeyBytes,
+  }) : privateKeyBytes = List<int>.unmodifiable(privateKeyBytes),
+       publicKeyBytes = List<int>.unmodifiable(publicKeyBytes);
+
+  factory LicenseIssuerKeyMaterial.fromJson(Map<String, dynamic> json) {
+    final schemaVersion = json['schemaVersion'];
+    final algorithm = json['algorithm'];
+    final privateKey = json['privateKey'];
+    final publicKey = json['publicKey'];
+
+    if (schemaVersion != 1 ||
+        algorithm != 'Ed25519' ||
+        privateKey is! String ||
+        publicKey is! String) {
+      throw const LicenseException('Dokumen private key tidak valid.');
+    }
+
+    try {
+      final privateKeyBytes = base64Url.decode(
+        base64Url.normalize(privateKey.trim()),
+      );
+
+      final publicKeyBytes = base64Url.decode(
+        base64Url.normalize(publicKey.trim()),
+      );
+
+      if (privateKeyBytes.length != 32) {
+        throw const LicenseException(
+          'Private key Ed25519 harus berukuran 32 byte.',
+        );
+      }
+
+      if (publicKeyBytes.length != 32) {
+        throw const LicenseException(
+          'Public key Ed25519 harus berukuran 32 byte.',
+        );
+      }
+
+      return LicenseIssuerKeyMaterial(
+        privateKeyBytes: privateKeyBytes,
+        publicKeyBytes: publicKeyBytes,
+      );
+    } on LicenseException {
+      rethrow;
+    } on FormatException {
+      throw const LicenseException('Encoding private key tidak valid.');
+    }
+  }
+
+  final List<int> privateKeyBytes;
+  final List<int> publicKeyBytes;
+}
+
+class IssuedOfflineLicense {
+  const IssuedOfflineLicense({
+    required this.payload,
+    required this.token,
+    required this.request,
+    required this.requestCode,
+    required this.publicKeyFingerprint,
+  });
+
+  final LicensePayload payload;
+  final String token;
+  final ActivationRequest request;
+  final String requestCode;
+  final String publicKeyFingerprint;
+}
+
+class OfflineLicenseIssuer {
+  OfflineLicenseIssuer({Ed25519? algorithm, LicenseTokenCodec? tokenCodec})
+    : _algorithm = algorithm ?? Ed25519(),
+      _tokenCodec = tokenCodec ?? LicenseTokenCodec();
+
+  final Ed25519 _algorithm;
+  final LicenseTokenCodec _tokenCodec;
+
+  ActivationRequest decodeActivationRequest(String encodedRequest) {
+    final cleaned = _cleanEncodedRequest(encodedRequest);
+
+    if (cleaned.isEmpty) {
+      throw const LicenseException('Data aktivasi tidak boleh kosong.');
+    }
+
+    try {
+      final decodedBytes = base64Url.decode(base64Url.normalize(cleaned));
+
+      final decodedJson = jsonDecode(utf8.decode(decodedBytes));
+
+      if (decodedJson is! Map<String, dynamic>) {
+        throw const LicenseException('Isi data aktivasi tidak valid.');
+      }
+
+      final request = ActivationRequest.fromJson(decodedJson);
+
+      if (request.applicationId != LicenseConstants.applicationId) {
+        throw const LicenseException(
+          'Data aktivasi bukan berasal dari aplikasi ini.',
+        );
+      }
+
+      if (request.schemaVersion != LicenseConstants.activationSchemaVersion) {
+        throw const LicenseException('Versi data aktivasi tidak didukung.');
+      }
+
+      return request;
+    } on LicenseException {
+      rethrow;
+    } on Object {
+      throw const LicenseException(
+        'Data aktivasi rusak atau tidak dapat dibaca.',
+      );
+    }
+  }
+
+  Future<String> createRequestCode(String encodedRequest) async {
+    final cleaned = _cleanEncodedRequest(encodedRequest);
+
+    if (cleaned.isEmpty) {
+      throw const LicenseException('Data aktivasi tidak boleh kosong.');
+    }
+
+    final digest = await Sha256().hash(utf8.encode(cleaned));
+
+    final hex = digest.bytes
+        .take(8)
+        .map((byte) => byte.toRadixString(16).padLeft(2, '0'))
+        .join()
+        .toUpperCase();
+
+    return <String>[
+      hex.substring(0, 4),
+      hex.substring(4, 8),
+      hex.substring(8, 12),
+      hex.substring(12, 16),
+    ].join('-');
+  }
+
+  Future<IssuedOfflineLicense> issue({
+    required String encodedRequest,
+    required LicenseIssuerKeyMaterial keyMaterial,
+    required List<int> trustedPublicKeyBytes,
+    required String licenseId,
+    required String storeName,
+    required DateTime issuedAt,
+    int? validityDays,
+    DateTime? expiresAt,
+    required List<String> features,
+  }) async {
+    final request = decodeActivationRequest(encodedRequest);
+
+    final cleanedLicenseId = licenseId.trim();
+    final cleanedStoreName = storeName.trim();
+
+    if (cleanedLicenseId.isEmpty) {
+      throw const LicenseException('ID lisensi tidak boleh kosong.');
+    }
+
+    if (cleanedStoreName.isEmpty) {
+      throw const LicenseException('Nama toko tidak boleh kosong.');
+    }
+
+    if (validityDays == null && expiresAt == null) {
+      throw const LicenseException(
+        'Masa aktif atau tanggal kedaluwarsa wajib diberikan.',
+      );
+    }
+
+    if (validityDays != null && expiresAt != null) {
+      throw const LicenseException(
+        'Gunakan masa aktif atau tanggal kedaluwarsa, bukan keduanya.',
+      );
+    }
+
+    if (validityDays != null && (validityDays < 1 || validityDays > 3650)) {
+      throw const LicenseException(
+        'Masa aktif harus antara 1 sampai 3650 hari.',
+      );
+    }
+
+    if (trustedPublicKeyBytes.length != 32) {
+      throw const LicenseException('Public key aplikasi tidak valid.');
+    }
+
+    if (!_bytesEqual(keyMaterial.publicKeyBytes, trustedPublicKeyBytes)) {
+      throw const LicenseException(
+        'Public key pada private key tidak cocok '
+        'dengan public key di aplikasi.',
+      );
+    }
+
+    final normalizedFeatures =
+        features
+            .map((feature) => feature.trim())
+            .where((feature) => feature.isNotEmpty)
+            .toSet()
+            .toList()
+          ..sort();
+
+    if (normalizedFeatures.isEmpty) {
+      throw const LicenseException(
+        'Lisensi harus memiliki minimal satu fitur.',
+      );
+    }
+
+    final issuedAtUtc = issuedAt.toUtc();
+
+    final expiresAtUtc =
+        expiresAt?.toUtc() ?? issuedAtUtc.add(Duration(days: validityDays!));
+
+    if (!expiresAtUtc.isAfter(issuedAtUtc)) {
+      throw const LicenseException(
+        'Tanggal kedaluwarsa harus setelah tanggal penerbitan.',
+      );
+    }
+
+    if (expiresAtUtc.isAfter(issuedAtUtc.add(const Duration(days: 3650)))) {
+      throw const LicenseException('Masa berlaku maksimal 3650 hari.');
+    }
+
+    final payload = LicensePayload(
+      schemaVersion: LicenseConstants.licenseSchemaVersion,
+      applicationId: LicenseConstants.applicationId,
+      licenseId: cleanedLicenseId,
+      installationId: request.installationId,
+      storeName: cleanedStoreName,
+      issuedAt: issuedAtUtc,
+      expiresAt: expiresAtUtc,
+      features: normalizedFeatures,
+    );
+
+    final keyPair = await _algorithm.newKeyPairFromSeed(
+      keyMaterial.privateKeyBytes,
+    );
+
+    try {
+      final derivedPublicKey = await keyPair.extractPublicKey();
+
+      if (!_bytesEqual(derivedPublicKey.bytes, keyMaterial.publicKeyBytes)) {
+        throw const LicenseException(
+          'Private key dan public key tidak berpasangan.',
+        );
+      }
+
+      final draft = _tokenCodec.createDraft(payload);
+
+      final signature = await _algorithm.sign(
+        draft.signedMessage,
+        keyPair: keyPair,
+      );
+
+      final signatureValid = await _algorithm.verify(
+        draft.signedMessage,
+        signature: signature,
+      );
+
+      if (!signatureValid) {
+        throw const LicenseException('Verifikasi internal tanda tangan gagal.');
+      }
+
+      final token = _tokenCodec.assemble(
+        draft: draft,
+        signatureBytes: signature.bytes,
+      );
+
+      final requestCode = await createRequestCode(encodedRequest);
+
+      final publicKeyFingerprint = await _createPublicKeyFingerprint(
+        keyMaterial.publicKeyBytes,
+      );
+
+      return IssuedOfflineLicense(
+        payload: payload,
+        token: token,
+        request: request,
+        requestCode: requestCode,
+        publicKeyFingerprint: publicKeyFingerprint,
+      );
+    } finally {
+      keyPair.destroy();
+    }
+  }
+
+  Future<String> _createPublicKeyFingerprint(List<int> publicKeyBytes) async {
+    final digest = await Sha256().hash(publicKeyBytes);
+
+    return digest.bytes
+        .take(8)
+        .map((byte) => byte.toRadixString(16).padLeft(2, '0').toUpperCase())
+        .join(':');
+  }
+
+  String _cleanEncodedRequest(String value) {
+    return value.replaceAll(RegExp(r'\s+'), '').trim();
+  }
+
+  bool _bytesEqual(List<int> first, List<int> second) {
+    if (first.length != second.length) {
+      return false;
+    }
+
+    var difference = 0;
+
+    for (var index = 0; index < first.length; index++) {
+      difference |= first[index] ^ second[index];
+    }
+
+    return difference == 0;
+  }
+}

@@ -1,0 +1,2480 @@
+======================================================================
+HANDOFF + ROADMAP PRAKTIK LENGKAP
+KASIR OFFLINE + KASIR LICENSE MANAGER
+DARI STATUS TERKINI SAMPAI SELESAI / RELEASE
+======================================================================
+
+Tanggal dokumen : 25 Juli 2026
+Zona waktu      : Asia/Jakarta
+Bahasa          : Indonesia
+Jenis dokumen   : TXT / handoff lintas chat
+Tujuan          :
+1. Menjadi sumber konteks utama saat pindah ke chat baru.
+2. Menjelaskan status pekerjaan yang sudah terverifikasi.
+3. Menandai pekerjaan yang baru direncanakan tetapi belum dikonfirmasi selesai.
+4. Menjabarkan seluruh praktik tersisa sampai release secara bertahap.
+5. Memberikan target file, target test, urutan test, jalur negatif, dan
+   kriteria selesai pada setiap tahap.
+6. Mencegah AI berikutnya menebak struktur atau mengulang pekerjaan yang sudah
+   selesai.
+
+======================================================================
+0. CATATAN AKURASI DAN BATAS DOKUMEN
+======================================================================
+
+Dokumen ini disusun dari:
+- handoff lama tanggal 20 Juli 2026;
+- audit source dan test yang dilakukan setelah handoff lama;
+- hasil targeted test, regression test, flutter analyze, dan full flutter test
+  yang dilaporkan pengguna;
+- keputusan arsitektur yang telah disepakati;
+- roadmap release-grade yang disusun berdasarkan kondisi source yang telah
+  diaudit.
+
+Dokumen ini TIDAK memiliki akses langsung ke drive C: pada saat dibuat.
+Karena itu, chat baru WAJIB melakukan audit source aktual sebelum perubahan
+besar.
+
+Pemisahan informasi:
+- [TERVERIFIKASI] berarti source/test pernah diaudit dan pengguna telah
+  mengonfirmasi berhasil.
+- [RENCANA TERAKHIR] berarti langkah sudah dirancang rinci tetapi belum ada
+  konfirmasi bahwa pengguna telah menerapkannya.
+- [BELUM DIAUDIT] berarti praktik release yang penting, tetapi detail source
+  aktual harus diperiksa dahulu.
+- [OPSIONAL V1] berarti dapat ditunda jika scope release pertama harus kecil,
+  selama risikonya dipahami dan dicatat.
+
+PENTING:
+Status terakhir yang terverifikasi masih menunjukkan database kasir_offline
+schemaVersion 8. Batch schema 9 untuk identitas pelaku transaksi telah
+dirancang, tetapi BELUM dikonfirmasi berhasil oleh pengguna sebelum dokumen
+ini dibuat.
+
+======================================================================
+1. LOKASI PROYEK DAN LINGKUNGAN
+======================================================================
+
+A. Aplikasi toko / POS
+----------------------
+C:\Development\projects\kasir_offline
+
+B. Aplikasi privat penerbit lisensi / Super Admin
+--------------------------------------------------
+C:\Development\projects\kasir_license_manager
+
+Lingkungan yang pernah dicatat:
+- Windows 11 Home Single Language 25H2
+- Flutter stable 3.44.6
+- Dart 3.12.2
+- Android SDK 36.0.0
+- Android Studio JDK 21.0.3
+- Perangkat fisik: V2322
+- Device ID Flutter: 10DE3201NZ000NB
+- Android 15 / API 35
+
+Perintah device:
+    flutter run -d 10DE3201NZ000NB
+
+Chat baru perlu memverifikasi ulang:
+    flutter --version
+    dart --version
+    flutter doctor -v
+    flutter devices
+
+======================================================================
+2. ATURAN KERJA YANG TIDAK BOLEH DILANGGAR
+======================================================================
+
+2.1 Audit-first
+---------------
+Sebelum perubahan:
+1. Baca source aktual.
+2. Cari semua pemanggilan method/class terkait.
+3. Baca test yang sudah ada.
+4. Jalankan baseline targeted.
+5. Jangan menebak nama file, constructor, schema, atau provider.
+
+2.2 Batch dipercepat
+--------------------
+Pengguna meminta progres tidak lagi terlalu satu-per-satu.
+
+Metode baru:
+- Gabungkan 3 sampai 5 checkpoint yang masih satu domain.
+- Contoh satu batch:
+  repository + ViewModel + UI + wiring + test.
+- Tetap berhenti bila muncul error pertama.
+- Jangan memperbaiki error kedua sebelum error pertama selesai.
+
+2.3 Urutan test wajib
+---------------------
+Untuk setiap batch:
+1. dart format pada file yang berubah.
+2. targeted test paling dekat.
+3. test file terkait.
+4. regression subsistem.
+5. migration test jika schema berubah.
+6. flutter analyze.
+7. full flutter test.
+8. device test.
+9. negative path nyata.
+
+2.4 Debug error pertama
+-----------------------
+Jika test gagal:
+- ambil test pertama yang gagal;
+- baca stack trace pertama;
+- perbaiki akar masalah terkecil;
+- jangan merombak beberapa file tanpa bukti;
+- jalankan ulang targeted test tersebut;
+- setelah hijau, lanjutkan urutan regression.
+
+Contoh nyata yang sudah terjadi:
+- matcher `find.textContaining()` menemukan dua pesan karena error tampil di
+  banner halaman dan dialog;
+- solusinya bukan mengubah repository, tetapi mempersempit finder ke descendant
+  dari widget error dialog.
+
+2.5 Database
+------------
+- Gunakan SATU AppDatabase bersama.
+- Jangan membuat database auth kedua.
+- Jangan menghapus migration lama.
+- Jangan mengedit *.g.dart secara manual.
+- Jangan mengedit generated schema secara manual.
+- Gunakan Drift migration snapshots dan migration matrix.
+- Setiap schema baru harus memiliki data-integrity test.
+
+2.6 Keamanan lisensi
+--------------------
+JANGAN PERNAH:
+- meminta private signing key;
+- menampilkan private key;
+- memasukkan private key ke kasir_offline;
+- mengirim private key lewat chat, log, screenshot, atau repository;
+- membuat ulang keypair tanpa prosedur recovery;
+- menghapus backup private key;
+- menampilkan token lisensi lengkap di history/log;
+- mengklaim sistem mustahil dibajak.
+
+kasir_offline hanya membawa PUBLIC KEY.
+kasir_license_manager adalah satu-satunya aplikasi yang boleh mengakses private
+key melalui secure storage.
+
+2.7 PIN
+-------
+- PIN asli tidak boleh disimpan.
+- Hash produksi: PBKDF2-HMAC-SHA256.
+- Iterasi produksi: 120.000.
+- Salt acak 16 byte.
+- Test widget/repository yang tidak sedang menguji crypto boleh memakai
+  `_FastPinHashService`.
+- Jangan log PIN, hash, atau salt.
+
+======================================================================
+3. GAMBARAN BESAR SISTEM
+======================================================================
+
+3.1 kasir_offline
+-----------------
+Aplikasi POS offline berbasis Flutter + Drift/SQLite dengan fitur yang sudah
+ada:
+- setup toko;
+- dashboard;
+- kategori dan produk;
+- stok;
+- kasir/keranjang/checkout;
+- pembayaran;
+- riwayat transaksi;
+- laporan;
+- pembatalan transaksi;
+- printer thermal Bluetooth;
+- desain struk;
+- tema;
+- lisensi offline Ed25519;
+- login PIN Manager/Kasir;
+- manager recovery untuk database lama;
+- manajemen akun Kasir.
+
+3.2 kasir_license_manager
+-------------------------
+Aplikasi privat Super Admin untuk:
+- menerima Data Aktivasi;
+- memvalidasi Kode Permintaan;
+- membaca private key dari secure storage;
+- menerbitkan token lisensi Ed25519;
+- menyimpan registry;
+- renewal;
+- mencatat relasi lisensi lama dan baru;
+- menampilkan history tanpa mengekspos token penuh.
+
+3.3 Alur lisensi
+----------------
+kasir_offline:
+    Installation ID
+    -> Data Aktivasi
+    -> Kode Permintaan
+
+kasir_license_manager:
+    Data Aktivasi + Kode Permintaan
+    -> validasi
+    -> draft lisensi
+    -> private key secure storage
+    -> signature Ed25519
+    -> registry
+    -> token
+
+kasir_offline:
+    token
+    -> verifikasi signature
+    -> verifikasi application/schema/installation/time/expiry
+    -> simpan secure storage
+    -> startup gate membuka aplikasi
+
+======================================================================
+4. STATUS TERKINI YANG SUDAH TERVERIFIKASI
+======================================================================
+
+4.1 Dasar POS
+-------------
+[TERVERIFIKASI]
+Praktik dasar POS 01 sampai 14B telah dinyatakan selesai pada handoff lama.
+
+Fitur utama yang sudah mempunyai repository/test:
+- setup;
+- category/product;
+- sale/checkout;
+- sale history;
+- cancellation;
+- report;
+- stock;
+- printer;
+- theme;
+- receipt design;
+- license.
+
+4.2 Lisensi offline
+-------------------
+[TERVERIFIKASI]
+Tahap lisensi 15A sampai 16F-4E3D telah dinyatakan selesai.
+
+Yang sudah bekerja:
+- installation identity;
+- activation request;
+- request code;
+- token codec;
+- signature verifier;
+- validation service;
+- activation service;
+- secure token storage;
+- startup license gate;
+- license info;
+- safe license replacement;
+- renewal;
+- registry;
+- issuance dari license manager;
+- persistence setelah restart;
+- negative replacement protection;
+- end-to-end device test issuance/activation/renewal/history.
+
+Jangan merombak subsistem lisensi tanpa audit dan alasan kuat.
+
+4.3 Auth/role sampai setup Manager
+----------------------------------
+[TERVERIFIKASI]
+Selesai:
+- audit auth/role;
+- UserRole Manager/Kasir dan Admin legacy sementara;
+- tabel AppUsers pada schema 8;
+- index app_users_store_active_idx;
+- PinHashService PBKDF2;
+- AppUserRepository;
+- setup repository mengembalikan storeId;
+- InitialManagerAccountInput;
+- InitialSetupCoordinator;
+- setup toko + Manager satu transaksi;
+- rollback jika hash/insert Manager gagal;
+- form setup Manager;
+- widget test setup.
+
+4.4 Login nyata
+---------------
+[TERVERIFIKASI]
+Selesai:
+- LoginViewModel;
+- provider LoginViewModel memakai AppDatabase dan AppUserRepository yang sama;
+- LoginPage nyata menggantikan Admin Demo;
+- login Manager;
+- login Kasir;
+- PIN salah;
+- format PIN invalid;
+- login tanpa toko;
+- clear PIN setelah login;
+- Login -> AppShell;
+- logout -> Login;
+- role menu Manager/Kasir;
+- login shell integration test.
+
+4.5 Recovery database lama
+--------------------------
+[TERVERIFIKASI]
+Selesai:
+- AppStartupDestination.managerRecovery;
+- startup aktif-store-aware;
+- database setup lengkap tetapi AppUsers kosong diarahkan ke recovery;
+- akun pada toko nonaktif tidak mencegah recovery toko aktif;
+- ManagerRecoveryCoordinator;
+- transaksi recovery;
+- ManagerRecoveryViewModel;
+- ManagerRecoveryPage nyata;
+- validasi nama/PIN/confirmation;
+- blokir back;
+- recovery tidak membuat ulang toko/settings/theme;
+- recovery ditolak jika akun aktif sudah ada;
+- migration helper mengenal schema 8;
+- from7To8 membuat AppUsers dan index;
+- migration v7 -> v8 matrix;
+- data integrity v7 -> v8;
+- real migrated recovery flow:
+      schema 7
+      -> migrate schema 8
+      -> managerRecovery
+      -> buat Manager
+      -> close/reopen
+      -> startup Login
+      -> PIN masih dapat dipakai.
+
+4.6 Session identity
+--------------------
+[TERVERIFIKASI]
+AppUserSession telah diperkuat dengan:
+- uid nullable;
+- storeId nullable;
+- name;
+- role;
+- hasPersistentIdentity.
+
+LocalAppUser.toSession() membawa:
+- uid;
+- storeId;
+- displayName;
+- role.
+
+Manager/Kasir hasil login memiliki persistent identity.
+Admin legacy fixture boleh tidak memiliki uid/storeId.
+
+4.7 User management foundation
+------------------------------
+[TERVERIFIKASI]
+AppUserRepository sudah mempunyai:
+- createUser();
+- authenticate();
+- getActiveUsers();
+- getUsers(), termasuk nonaktif;
+- setCashierActive();
+- resetCashierPin();
+- PIN diperiksa terhadap akun aktif dan nonaktif;
+- status/PIN Manager tidak boleh diubah lewat operasi Kasir.
+
+UserManagementViewModel sudah mempunyai:
+- load;
+- createCashier;
+- activate/deactivate cashier;
+- reset cashier PIN;
+- validation;
+- session Manager guard;
+- store ownership guard;
+- success/error state.
+
+4.8 User management UI
+----------------------
+[TERVERIFIKASI]
+Selesai:
+- AppSection.accounts;
+- menu Akun hanya untuk Manager dengan persistent identity;
+- UserManagementPage;
+- daftar Manager dan Kasir;
+- status Aktif/Nonaktif;
+- dialog Tambah Kasir;
+- dialog Reset PIN;
+- konfirmasi aktivasi/nonaktivasi;
+- akun Manager dilindungi;
+- UserManagementViewModel dibuat per session sesudah login;
+- wiring AppShell;
+- duplikasi pemanggilan load cashier/stock/history dibersihkan;
+- role tests;
+- widget tests;
+- Login -> Akun integration;
+- Cashier tidak melihat menu Akun;
+- PIN duplikat menampilkan error dan dialog tetap terbuka.
+
+Pengguna melaporkan seluruh targeted test dan full `flutter test` berhasil
+setelah matcher error diperbaiki.
+
+4.9 Schema database terverifikasi terakhir
+------------------------------------------
+[TERVERIFIKASI PADA AUDIT TERAKHIR]
+- kasir_offline schemaVersion = 8.
+- generated schema tersedia sampai v8.
+- migration helper tersedia sampai from7To8.
+- AppUsers sudah berada di schema 8.
+
+4.10 Gap actor identity yang ditemukan
+--------------------------------------
+[TERVERIFIKASI DARI AUDIT]
+- Sales hanya menyimpan cashierName snapshot.
+- CheckoutRequest masih menerima cashierName bebas.
+- AuditLogs hanya menyimpan actorName/actorRole snapshot.
+- pembatalan transaksi masih menerima actorName/actorRole bebas;
+- cancellation guard lama masih terkait role string legacy `admin`;
+- StockRepository juga masih perlu diaudit/diubah agar menggunakan session
+  nyata dan actor UID.
+
+======================================================================
+5. STATUS TERAKHIR SAAT PINDAH CHAT
+======================================================================
+
+TERAKHIR YANG PASTI BERHASIL:
+- UI Manajemen Akun lengkap.
+- targeted test user management.
+- integration Login -> Akun.
+- flutter analyze.
+- full flutter test.
+- perbaikan finder pesan PIN duplikat.
+
+RENCANA TERAKHIR YANG SUDAH DIBUAT TETAPI BELUM DIKONFIRMASI:
+- Batch 17C-1B2D6A-D:
+  schema 9 + persistent actor identity untuk checkout dan cancellation.
+
+JANGAN MENGANGGAP SCHEMA 9 SUDAH ADA.
+
+Chat baru harus pertama-tama memeriksa:
+1. Apakah pengguna sempat menerapkan perubahan schema 9 setelah chat ini?
+2. Berapa `schemaVersion` aktual?
+3. Apakah `drift_schema_v9.json` ada?
+4. Apakah `schema_v9.dart` ada?
+5. Apakah `app_database.steps.dart` memiliki from8To9?
+6. Apakah CheckoutRequest sudah memakai AppUserSession?
+7. Apakah SaleCancellationRepository sudah memakai AppUserSession?
+8. Apakah full test masih hijau?
+
+======================================================================
+6. LANGKAH PERTAMA DI CHAT BARU
+======================================================================
+
+6.1 Jangan langsung memberi patch
+---------------------------------
+Minta atau buat audit ringkas aktual.
+
+Perintah minimal:
+    cd C:\Development\projects\kasir_offline
+
+    git status --short
+
+    Select-String `
+      -Path "lib\core\database\app_database.dart" `
+      -SimpleMatch `
+      -Pattern `
+        "schemaVersion",`
+        "cashierUserUid",`
+        "actorUserUid",`
+        "from8To9" `
+      -Context 4,20
+
+    Get-ChildItem `
+      "drift_schemas\kasir_database" `
+      -File |
+    Sort-Object Name
+
+    Get-ChildItem `
+      "test\drift\kasir_database\generated" `
+      -File |
+    Sort-Object Name
+
+    Select-String `
+      -Path `
+        "lib\features\sales\data\sale_repository.dart",`
+        "lib\features\sales\data\sale_cancellation_repository.dart" `
+      -SimpleMatch `
+      -Pattern `
+        "AppUserSession",`
+        "cashierName",`
+        "cashierUserUid",`
+        "actorName",`
+        "actorRole",`
+        "actorUserUid" `
+      -Context 5,25
+
+Baseline:
+    flutter test test\user_management_page_test.dart --reporter expanded
+    flutter test test\login_shell_flow_test.dart --reporter expanded
+    flutter test test\drift\kasir_database\migration_test.dart --reporter expanded
+    flutter analyze
+
+Jika semua masih schema 8, mulai dari Tahap 7.
+
+======================================================================
+7. TAHAP BERIKUTNYA WAJIB:
+   PERSISTENT ACTOR IDENTITY / SCHEMA 9
+======================================================================
+
+Status:
+[RENCANA TERAKHIR — BELUM DIKONFIRMASI]
+
+Tujuan:
+- transaksi menyimpan UID akun pembuat transaksi;
+- pembatalan menyimpan UID Manager pelaku;
+- nama dan role lama tetap menjadi snapshot historis;
+- data schema 8 lama tetap dapat dibaca;
+- akun yang kemudian dinonaktifkan tidak menghapus identitas historis;
+- authorization dilakukan di repository/service, bukan hanya UI.
+
+7.1 Desain schema
+-----------------
+Sales:
+- pertahankan cashierName;
+- tambah cashierUserUid nullable;
+- FK ke AppUsers.uid;
+- onDelete setNull.
+
+AuditLogs:
+- pertahankan actorName;
+- pertahankan actorRole;
+- tambah actorUserUid nullable;
+- FK ke AppUsers.uid;
+- onDelete setNull.
+
+Alasan nullable:
+- transaksi/audit schema 8 tidak memiliki UID;
+- migration harus mempertahankan row lama;
+- snapshot lama tetap valid.
+
+7.2 File produksi kemungkinan berubah
+-------------------------------------
+- lib/core/database/app_database.dart
+- lib/core/database/app_database.g.dart [GENERATED]
+- lib/core/database/app_database.steps.dart [GENERATED]
+- drift_schemas/kasir_database/drift_schema_v9.json [GENERATED]
+- test/drift/kasir_database/generated/schema.dart [GENERATED]
+- test/drift/kasir_database/generated/schema_v9.dart [GENERATED]
+- lib/features/sales/data/sale_repository.dart
+- lib/features/cashier/presentation/cashier_view_model.dart
+- lib/features/cashier/presentation/cashier_page.dart
+- lib/features/sales/data/sale_cancellation_repository.dart
+- lib/features/history/presentation/transaction_history_view_model.dart
+- lib/features/history/presentation/transaction_history_page.dart
+- lib/features/shell/presentation/app_shell_page.dart
+
+7.3 Implementasi schema
+-----------------------
+Di `Sales`:
+    TextColumn get cashierUserUid => text()
+        .nullable()
+        .references(
+          AppUsers,
+          #uid,
+          onDelete: KeyAction.setNull,
+        )();
+
+Di `AuditLogs`:
+    TextColumn get actorUserUid => text()
+        .nullable()
+        .references(
+          AppUsers,
+          #uid,
+          onDelete: KeyAction.setNull,
+        )();
+
+Naikkan:
+    schemaVersion 8 -> 9
+
+Generate:
+    dart format lib\core\database\app_database.dart
+    dart run drift_dev make-migrations
+    dart run build_runner build
+
+Catatan:
+- gunakan command yang benar untuk versi drift/build_runner aktual;
+- jangan edit file generated;
+- jika `make-migrations` tidak menghasilkan test generated, audit konfigurasi
+  sebelum melakukan command alternatif;
+- jangan menghapus snapshot v1-v8.
+
+Migration:
+    from8To9:
+      addColumn sales.cashierUserUid
+      addColumn auditLogs.actorUserUid
+
+7.4 Checkout memakai session
+----------------------------
+CheckoutRequest:
+- hapus field cashierName;
+- tambah `AppUserSession cashier`.
+
+SaleRepository harus:
+1. memperoleh toko aktif;
+2. memverifikasi session memiliki uid/storeId;
+3. memverifikasi storeId session sama dengan toko;
+4. mengizinkan role Manager atau Kasir;
+5. membaca AppUsers berdasarkan uid/store/isActive;
+6. memastikan role stored sama dengan role session;
+7. menggunakan displayName stored sebagai cashierName snapshot;
+8. menyimpan cashierUserUid;
+9. menolak session legacy atau akun nonaktif;
+10. melakukan semua dalam transaksi checkout.
+
+Jangan percaya:
+- nama dari TextField;
+- role string dari UI;
+- storeId bebas dari caller.
+
+7.5 CashierViewModel dan CashierPage
+------------------------------------
+- CashierViewModel.checkout menerima AppUserSession.
+- CashierPage menerima session, bukan cashierName.
+- AppShell meneruskan widget.session.
+- Tidak boleh ada jalur checkout produksi yang masih mengirim nama bebas.
+
+7.6 Pembatalan memakai session Manager
+--------------------------------------
+SaleCancellationRepository.cancelSale:
+- ganti actorName/actorRole dengan AppUserSession actor;
+- role yang sah adalah UserRole.manager;
+- persistent identity wajib;
+- store session harus sama;
+- akun Manager harus aktif;
+- baca displayName/role dari database;
+- simpan actorUserUid + snapshot;
+- Kasir ditolak di repository;
+- Admin legacy ditolak.
+
+7.7 History UI
+--------------
+TransactionHistoryPage:
+- menerima AppUserSession;
+- tombol cancel hanya aktif untuk Manager persistent;
+- ViewModel meneruskan actor session;
+- repository tetap menjadi guard final.
+
+7.8 Test baru/wajib
+-------------------
+Migration:
+- migration v8 -> v9 mempertahankan sale.cashierName;
+- migrated sale.cashierUserUid null;
+- migration mempertahankan audit.actorName/actorRole;
+- migrated audit.actorUserUid null;
+- migration matrix v1-v9;
+- user_version = 9.
+
+Checkout:
+- cashier UID tersimpan;
+- cashier name berasal dari stored user;
+- session tanpa identity ditolak;
+- session store lain ditolak;
+- akun nonaktif ditolak;
+- role mismatch ditolak;
+- Manager boleh checkout;
+- Kasir boleh checkout;
+- Admin legacy ditolak;
+- kegagalan guard tidak membuat sale/item/payment/stock movement.
+
+Cancellation:
+- Manager aktif berhasil;
+- actor UID tersimpan;
+- actor snapshot benar;
+- Kasir ditolak;
+- Admin legacy ditolak;
+- Manager nonaktif ditolak;
+- Manager toko lain ditolak;
+- audit tidak dibuat jika cancellation gagal;
+- stok tidak berubah jika cancellation gagal.
+
+Test file yang perlu diperbarui:
+- test/sale_repository_test.dart
+- test/cashier_view_model_test.dart
+- test/sale_cancellation_repository_test.dart
+- test/sale_history_repository_test.dart
+- test/transaction_history_view_model_test.dart
+- test/transaction_history_page_test.dart
+- test/receipt_printer_service_test.dart
+- test/login_shell_flow_test.dart
+- test/drift/kasir_database/migration_test.dart
+- test/drift/kasir_database/migrated_recovery_flow_test.dart
+- test/app_user_table_test.dart bila schemaVersion diperiksa.
+
+7.9 Urutan test
+---------------
+    dart format <semua file berubah>
+
+    flutter test `
+      test\drift\kasir_database\migration_test.dart `
+      --plain-name `
+      "migration v8 ke v9 mempertahankan snapshot actor lama" `
+      --reporter expanded
+
+    flutter test test\drift\kasir_database\migration_test.dart --reporter expanded
+    flutter test test\sale_repository_test.dart --reporter expanded
+    flutter test test\cashier_view_model_test.dart --reporter expanded
+    flutter test test\sale_cancellation_repository_test.dart --reporter expanded
+    flutter test test\sale_history_repository_test.dart --reporter expanded
+    flutter test test\transaction_history_view_model_test.dart --reporter expanded
+    flutter test test\transaction_history_page_test.dart --reporter expanded
+    flutter test test\receipt_printer_service_test.dart --reporter expanded
+    flutter test test\login_shell_flow_test.dart --reporter expanded
+    flutter test test\drift\kasir_database\migrated_recovery_flow_test.dart --reporter expanded
+    flutter analyze
+    flutter test
+
+7.10 Device test
+----------------
+Fresh install:
+- setup Manager;
+- buat Kasir;
+- login Kasir;
+- checkout;
+- logout;
+- login Manager;
+- buka history;
+- batalkan transaksi;
+- pastikan stok kembali;
+- pastikan history menampilkan snapshot nama benar.
+
+Upgrade:
+- gunakan database schema 8 nyata;
+- install build schema 9 di atas aplikasi lama;
+- license tetap aktif;
+- startup tetap Login;
+- sale lama terbaca;
+- sale lama memiliki actor UID null secara internal;
+- checkout baru memiliki actor UID;
+- restart;
+- data tetap.
+
+7.11 Exit criteria
+------------------
+Tahap selesai hanya jika:
+- schemaVersion 9;
+- snapshots v1-v9 tersimpan;
+- migration matrix hijau;
+- data-integrity hijau;
+- checkout tidak menerima nama bebas;
+- cancellation tidak menerima role/nama bebas;
+- full test hijau;
+- analyzer hijau;
+- device upgrade hijau.
+
+======================================================================
+8. TAHAP SETELAH SCHEMA 9:
+   SESSION IDENTITY UNTUK STOK DAN AKSI SENSITIF
+======================================================================
+
+Status:
+[TERKONFIRMASI SEBAGAI GAP, DETAIL PERLU AUDIT SOURCE TERBARU]
+
+Tujuan:
+- StockRepository tidak mempercayai currentUserName/currentUserRole string;
+- setiap penyesuaian stok manual memiliki actor UID;
+- role Manager diverifikasi dari AppUsers aktif;
+- Kasir tidak bisa mengubah stok dengan memanggil repository langsung;
+- audit snapshot tetap tersedia.
+
+8.1 Audit
+---------
+Baca:
+- lib/features/stock/data/stock_repository.dart
+- lib/features/stock/presentation/stock_view_model.dart
+- lib/features/stock/presentation/stock_page.dart
+- semua AuditLogsCompanion.insert
+- test/stock_repository_test.dart
+- test/stock_view_model_test.dart
+- widget test stock.
+
+Cari:
+- actorName;
+- actorRole;
+- currentUserName;
+- currentUserRole;
+- string `'admin'`;
+- string `'manager'`;
+- audit action;
+- manual adjustment;
+- stock opname.
+
+8.2 Implementasi
+----------------
+Recommended:
+- method sensitif menerima AppUserSession actor;
+- helper `_requireActiveManager`;
+- verify uid/store/role/isActive;
+- snapshot name/role dari stored user;
+- isi actorUserUid pada AuditLogs;
+- semua perubahan stock + audit berada di satu transaksi;
+- quantity_change, stock_before, stock_after harus konsisten;
+- alasan wajib untuk adjustment sensitif.
+
+8.3 Test
+--------
+- Manager aktif dapat adjustment;
+- actor UID tersimpan;
+- snapshot nama/role tersimpan;
+- Kasir ditolak;
+- Admin legacy ditolak;
+- Manager nonaktif ditolak;
+- store mismatch ditolak;
+- produk toko lain ditolak;
+- kegagalan audit menyebabkan rollback stock;
+- kegagalan stock menyebabkan audit tidak dibuat;
+- negative stock mengikuti setting;
+- duplicate/concurrent update tidak merusak stock.
+
+Urutan:
+    flutter test test\stock_repository_test.dart --reporter expanded
+    flutter test test\stock_view_model_test.dart --reporter expanded
+    flutter test test\widget_test.dart --plain-name "<stock test>" --reporter expanded
+    flutter test test\login_shell_flow_test.dart --reporter expanded
+    flutter analyze
+    flutter test
+
+======================================================================
+9. TAHAP AUTHORIZATION BOUNDARY AUDIT
+======================================================================
+
+Status:
+[BELUM DIAUDIT MENYELURUH]
+
+Masalah yang harus dicegah:
+Menyembunyikan menu saja bukan security boundary.
+
+Semua operasi sensitif harus melakukan guard di service/repository:
+- create/update/deactivate product;
+- create/update/deactivate category;
+- stock adjustment;
+- transaction cancellation;
+- user management;
+- license replacement;
+- printer/receipt settings jika dianggap Manager-only;
+- theme/settings jika dianggap Manager-only;
+- export/backup/restore;
+- data deletion/reset.
+
+9.1 Keputusan role matrix
+-------------------------
+Buat dokumen role matrix final.
+
+Recommended V1:
+
+Manager:
+- Dashboard;
+- Kasir;
+- Produk;
+- Stok;
+- Riwayat;
+- Cancel transaksi;
+- Akun;
+- Lisensi;
+- Tema;
+- Printer/settings;
+- Backup/restore;
+- Laporan penuh.
+
+Kasir:
+- Dashboard ringkas;
+- Kasir;
+- Riwayat baca;
+- cetak ulang bila diizinkan;
+- tidak boleh cancel;
+- tidak boleh edit produk/stok/user/license/settings.
+
+Admin legacy:
+- harus dihapus pada tahap tersendiri;
+- jangan digunakan sebagai role produksi.
+
+9.2 Pattern implementasi
+------------------------
+Pilihan sederhana:
+- setiap method sensitif menerima AppUserSession.
+
+Pilihan terstruktur:
+- buat `AuthenticatedActionContext` domain:
+      userUid
+      storeId
+      displayNameSnapshot
+      role
+- dibuat dari session;
+- repository tetap revalidate AppUsers.
+
+Jangan:
+- membuat global mutable current user tanpa lifecycle jelas;
+- mengandalkan Provider UI saja;
+- mengandalkan string role.
+
+9.3 Test matrix
+---------------
+Buat table-driven tests:
+- Manager allowed;
+- Cashier denied;
+- legacy/no identity denied;
+- inactive denied;
+- wrong store denied;
+- unknown UID denied;
+- role mismatch denied.
+
+Setiap denial harus memastikan:
+- row utama tidak berubah;
+- child rows tidak berubah;
+- audit tidak dibuat;
+- stock tidak berubah;
+- error tidak membocorkan data sensitif.
+
+======================================================================
+10. TAHAP HAPUS ADMIN LEGACY
+======================================================================
+
+Status:
+[BELUM SELESAI]
+
+Dilakukan HANYA setelah:
+- checkout memakai session;
+- cancellation memakai Manager;
+- stock memakai Manager;
+- semua operasi sensitif sudah tidak memerlukan `'admin'`;
+- tests telah menggunakan Manager/Kasir nyata.
+
+10.1 Audit referensi
+--------------------
+Cari seluruh:
+    UserRole.admin
+    'admin'
+    Admin Demo
+    Admin Legacy
+    hasManagerAccess
+    actorRole == 'admin'
+    currentUserRole
+    role.name
+
+Gunakan:
+    Get-ChildItem lib,test -Recurse -Filter *.dart |
+    Select-String -SimpleMatch `
+      -Pattern `
+        "UserRole.admin",`
+        "'admin'",`
+        '"admin"',`
+        "Admin Demo",`
+        "Admin Legacy"
+
+Pisahkan:
+- role app legacy;
+- kata admin untuk Super Admin license manager;
+- data snapshot audit lama.
+
+Jangan mengubah snapshot history lama `"admin"` secara paksa.
+
+10.2 Perubahan
+--------------
+- hapus UserRole.admin dari kasir_offline session enum;
+- update label/switch;
+- hapus hasManagerAccess atau ubah hanya role Manager;
+- update UserRoleCodec jika perlu;
+- ganti semua test fixture Admin menjadi Manager persistent;
+- update license_access_test;
+- update widget_test;
+- update history/cancellation/stock;
+- legacy audit row tetap dapat ditampilkan sebagai string snapshot.
+
+10.3 Test
+---------
+- analyzer menangkap switch tidak lengkap;
+- tidak ada UserRole.admin di lib kasir_offline;
+- search tidak menemukan Admin Demo;
+- Manager seluruh menu;
+- Cashier menu terbatas;
+- legacy audit actorRole `'admin'` tetap dapat dibaca;
+- migration lama tetap hijau;
+- full test hijau.
+
+Exit:
+    Select-String pada lib kasir_offline tidak menemukan UserRole.admin.
+    Full test + device test hijau.
+
+======================================================================
+11. TAHAP PENYEMPURNAAN ACCOUNT LIFECYCLE
+======================================================================
+
+Status:
+[SEBAGIAN SUDAH ADA]
+
+Sudah ada:
+- list users;
+- create Cashier;
+- activate/deactivate Cashier;
+- reset PIN Cashier;
+- PIN unik termasuk akun nonaktif;
+- Manager dilindungi.
+
+Belum terverifikasi:
+- rename Cashier;
+- Manager mengganti nama sendiri;
+- Manager mengganti PIN sendiri;
+- kebijakan satu Manager atau multi Manager;
+- audit perubahan akun;
+- logout/session invalidation sesudah perubahan akun;
+- recovery jika Manager lupa PIN tetapi akun aktif masih ada.
+
+11.1 Putuskan model Manager V1
+------------------------------
+Recommended untuk V1:
+- tepat satu akun Manager per toko;
+- Manager tidak dapat dinonaktifkan;
+- Manager dapat mengganti nama dan PIN sendiri;
+- Manager dapat mengelola banyak Cashier;
+- tidak ada UI membuat Manager kedua pada V1.
+
+Jika ingin multi Manager:
+- tambah last-active-manager guard;
+- current user guard;
+- manager creation;
+- transfer ownership/recovery;
+- jauh lebih banyak test.
+
+Jangan setengah-setengah. Dokumentasikan keputusan.
+
+11.2 Rename Cashier
+-------------------
+Repository:
+- update displayName by uid + store;
+- role harus Cashier;
+- name trim, wajib, max 100;
+- updatedAt;
+- historical sale/audit snapshot tidak berubah.
+
+ViewModel/UI:
+- dialog Edit Kasir;
+- success/error;
+- list refresh.
+
+Test:
+- rename berhasil;
+- empty/too long ditolak;
+- wrong store ditolak;
+- Manager target ditolak;
+- sale lama tetap memakai nama snapshot lama;
+- transaksi baru memakai nama baru.
+
+11.3 Change Manager PIN
+-----------------------
+Repository:
+- verify current Manager active;
+- optionally require old PIN;
+- new PIN format;
+- confirmation;
+- uniqueness terhadap seluruh akun toko;
+- hash baru;
+- updateAt;
+- tidak mengekspos hash.
+
+Recommended:
+- meminta PIN lama untuk self-change;
+- recovery lupa PIN menggunakan prosedur khusus, bukan change PIN biasa.
+
+Test:
+- old PIN benar -> berhasil;
+- old PIN salah -> gagal;
+- new PIN duplicate -> gagal;
+- new PIN invalid -> gagal;
+- old PIN tidak lagi valid;
+- new PIN valid;
+- rollback bila hash gagal.
+
+11.4 Reset Cashier PIN audit
+----------------------------
+Tambahkan AuditLog:
+- action user_pin_reset;
+- entity user;
+- actor Manager UID;
+- target UID boleh berada dalam details atau dedicated field jika diperlukan;
+- jangan simpan PIN/hash/salt.
+
+Test:
+- log dibuat;
+- tidak ada secret dalam detailsJson;
+- rollback bila update/log gagal.
+
+11.5 Recovery saat Manager lupa PIN
+-----------------------------------
+Current recovery hanya bekerja jika tidak ada active user.
+Release perlu prosedur operasional yang jelas.
+
+Pilihan:
+A. Recovery code yang diterbitkan Super Admin.
+B. Backup/restore database.
+C. Offline maintenance flow dengan token recovery ter-sign.
+D. Manual support process.
+
+Jangan membuat bypass PIN tersembunyi.
+Jangan menggunakan hardcoded PIN.
+Fitur ini perlu threat model terpisah.
+
+Bila ditunda V1:
+- dokumentasikan bahwa lupa PIN Manager memerlukan restore/support;
+- tampilkan peringatan saat setup;
+- minta pengguna menyimpan backup.
+
+======================================================================
+12. TAHAP LOGIN SECURITY HARDENING
+======================================================================
+
+Status:
+[BELUM]
+
+12.1 Risiko
+-----------
+- brute force PIN 4–6 digit;
+- percobaan tanpa batas;
+- shoulder surfing;
+- app ditinggal terbuka;
+- PIN tersisa di memory/controller;
+- pesan error terlalu spesifik;
+- jam perangkat/manipulasi state;
+- akun dinonaktifkan setelah session aktif.
+
+12.2 Attempt limiter
+--------------------
+Recommended:
+- setelah beberapa kegagalan, delay progresif;
+- jangan permanent lockout tanpa recovery;
+- contoh kebijakan:
+    percobaan 1-4: normal;
+    5: delay 2 detik;
+    6: 4 detik;
+    7: 8 detik;
+    maksimum delay 30 detik;
+- reset setelah login benar;
+- gunakan clock abstraction untuk test;
+- pertimbangkan persistence singkat agar restart tidak selalu reset.
+
+Jangan sleep blocking UI.
+ViewModel expose `retryAfter`.
+
+Test:
+- failed count bertambah;
+- delay diterapkan;
+- tombol disabled saat delay;
+- clock fake;
+- login benar reset count;
+- format invalid tidak harus dihitung sebagai auth failure;
+- akun lain/toko behavior jelas;
+- restart behavior sesuai keputusan.
+
+12.3 Generic error
+------------------
+Recommended:
+- `"PIN tidak dikenali atau akun tidak aktif."`
+- jangan mengungkap UID/nama/status.
+
+12.4 Lifecycle lock
+-------------------
+Saat app:
+- background lebih dari threshold;
+- device locked;
+- resume setelah beberapa menit;
+
+maka:
+- kembali ke Login;
+- clear cart atau simpan draft sesuai keputusan;
+- session provider dibuang;
+- sensitive page tidak terlihat di app switcher jika memungkinkan.
+
+Test:
+- lifecycle pause/resume;
+- threshold;
+- session disposed;
+- current page kembali Login;
+- tidak menyebabkan setup/license rerun yang salah.
+
+12.5 PIN field
+--------------
+- digits only;
+- obscure default;
+- clear on success;
+- clear on logout;
+- clear setelah terlalu banyak gagal bila diinginkan;
+- disable copy/paste opsional;
+- autofill off bila sesuai.
+
+12.6 Device test
+----------------
+- wrong PIN berulang;
+- delay UI;
+- background/resume;
+- logout;
+- screenshot/app switcher;
+- rotate/responsive;
+- PIN tidak muncul di logs.
+
+======================================================================
+13. TAHAP AUDIT LOG COMPLETENESS
+======================================================================
+
+Status:
+[SEBAGIAN]
+
+Yang diketahui menggunakan AuditLogs:
+- transaction cancellation;
+- stock-related operations tertentu.
+
+Belum diaudit lengkap:
+- create/update/deactivate product;
+- category changes;
+- user create/rename/activate/deactivate/reset PIN;
+- license replacement;
+- settings/theme;
+- backup/restore;
+- printer configuration;
+- receipt design.
+
+13.1 Prinsip
+------------
+Audit log:
+- append-only;
+- snapshot actor name/role;
+- actor UID nullable untuk legacy;
+- action code stabil;
+- entity type;
+- entity ID/UID;
+- summary non-secret;
+- detailsJson sanitized;
+- timestamp;
+- store ID.
+
+Jangan simpan:
+- PIN;
+- hash;
+- salt;
+- full license token;
+- private key;
+- secure storage value;
+- raw activation secret yang tidak perlu.
+
+13.2 Action codes
+-----------------
+Contoh:
+- sale_cancelled
+- stock_adjusted
+- product_created
+- product_updated
+- product_deactivated
+- category_created
+- category_updated
+- user_created
+- user_renamed
+- user_activated
+- user_deactivated
+- user_pin_reset
+- license_replaced
+- backup_created
+- restore_completed
+- printer_settings_updated
+
+Buat constants/enum agar typo tidak menyebar.
+
+13.3 Query/index
+----------------
+Audit apakah perlu schema 10 untuk index:
+- storeId + createdAt sudah ada;
+- entity index sudah ada;
+- mungkin actorUserUid + createdAt;
+- action + createdAt.
+
+Jangan menambah index tanpa query/performance evidence.
+
+13.4 Tests
+----------
+Untuk setiap action:
+- log dibuat sekali;
+- actor UID benar;
+- snapshot benar;
+- entity benar;
+- details tidak mengandung secret;
+- operasi dan audit atomik;
+- legacy actor UID null tetap dapat dibaca;
+- filter/order pagination benar.
+
+======================================================================
+14. TAHAP BACKUP / RESTORE DATA POS
+======================================================================
+
+Status:
+[BELUM TERKONFIRMASI; RECOMMENDED RELEASE BLOCKER]
+
+Aplikasi offline menyimpan data bisnis lokal. Tanpa backup, kehilangan/perangkat
+rusak dapat berarti kehilangan transaksi, produk, stok, dan akun.
+
+14.1 Scope backup
+-----------------
+Minimal:
+- SQLite database;
+- product images;
+- receipt logo/assets lokal;
+- metadata versi aplikasi/schema;
+- manifest file;
+- hash checksum.
+
+Jangan backup:
+- private key license manager ke backup POS;
+- raw temporary files;
+- build artifacts.
+
+Perlu keputusan khusus:
+- apakah secure license token ikut backup?
+Recommended:
+  jangan otomatis memindahkan token antar device karena installation binding.
+  Device replacement harus melalui workflow lisensi.
+
+14.2 Konsistensi SQLite/WAL
+---------------------------
+Sebelum backup:
+- pastikan transaksi selesai;
+- checkpoint WAL;
+- gunakan mekanisme Drift/SQLite yang aman;
+- jangan copy file DB secara sembarang saat write aktif;
+- blokir operasi write sementara;
+- verify integrity.
+
+14.3 Format backup
+------------------
+Recommended:
+- archive versioned;
+- manifest JSON:
+    backupFormatVersion
+    appVersion
+    schemaVersion
+    createdAt
+    installationId hash/non-secret
+    file list + SHA-256
+- encryption dengan passphrase dapat menjadi V1.1;
+- jika tidak terenkripsi, beri peringatan data bisnis sensitif.
+
+14.4 Restore
+------------
+- pilih file;
+- validasi extension/manifest/hash;
+- validasi schema supported;
+- backup current state sebelum overwrite;
+- close DB;
+- replace atomically;
+- reopen;
+- foreign_key_check;
+- integrity_check;
+- startup resolution;
+- license handling terpisah;
+- rollback ke DB lama jika restore gagal.
+
+14.5 Tests
+----------
+Unit/integration:
+- manifest encode/decode;
+- checksum mismatch ditolak;
+- unsupported version ditolak;
+- missing file ditolak;
+- backup lalu restore menghasilkan data identik;
+- users/hash tetap valid;
+- images ikut;
+- corrupt DB ditolak;
+- restore failure mempertahankan DB lama;
+- license token tidak salah dipindahkan;
+- schema lama dimigrasikan setelah restore.
+
+Device:
+- buat data;
+- backup ke folder;
+- uninstall/reinstall atau clear data sesuai skenario;
+- restore;
+- re-activate license bila installation berubah;
+- verifikasi transaksi/stock/user/image.
+
+======================================================================
+15. TAHAP DATA INTEGRITY DAN MAINTENANCE
+======================================================================
+
+Status:
+[SEBAGIAN]
+
+15.1 Database health
+--------------------
+Tambahkan service diagnostik Manager-only:
+- PRAGMA integrity_check;
+- PRAGMA foreign_key_check;
+- user_version;
+- row counts ringkas;
+- backup last date;
+- database file size.
+
+Jangan tampilkan secret.
+
+Test:
+- healthy DB;
+- synthetic FK violation pada test;
+- error message;
+- tidak menjalankan destructive repair otomatis.
+
+15.2 Transaction numbering
+--------------------------
+Audit:
+- uniqueness;
+- collision jika jam sama;
+- restart;
+- timezone;
+- concurrency;
+- rollback.
+
+Test high-frequency checkout:
+- banyak transaksi pada timestamp sama;
+- semua number unik;
+- ordering benar.
+
+15.3 Time handling
+------------------
+Pastikan:
+- epoch milliseconds konsisten;
+- display Asia/Jakarta;
+- laporan start/end day benar;
+- DST tidak relevan untuk Jakarta tetapi timezone field tetap;
+- perubahan jam perangkat tidak merusak numbering/license.
+
+15.4 Image/file cleanup
+-----------------------
+Audit orphan product images dan receipt logos:
+- update image;
+- delete/deactivate product;
+- restore;
+- failed copy.
+
+Buat cleanup aman hanya untuk file yang tidak direferensikan.
+
+======================================================================
+16. TAHAP PRINTER DAN HARDWARE RELEASE VALIDATION
+======================================================================
+
+Status:
+[FITUR SUDAH ADA, RELEASE MATRIX BELUM TERKONFIRMASI LENGKAP]
+
+16.1 Permission Android
+-----------------------
+Audit:
+- Bluetooth scan/connect permissions;
+- Android 12+;
+- denied/permanently denied;
+- device Bluetooth off;
+- location requirement pada device lama;
+- exported components.
+
+16.2 Printer states
+-------------------
+Uji:
+- printer belum dipilih;
+- printer mati;
+- disconnected mid-print;
+- paper habis;
+- timeout;
+- retry;
+- duplicate tap;
+- print receipt setelah checkout;
+- reprint;
+- cancellation receipt jika ada;
+- 58mm;
+- 80mm jika didukung;
+- karakter Indonesia;
+- panjang nama produk;
+- logo besar/rusak;
+- no logo.
+
+16.3 Atomicity
+--------------
+Prinsip:
+- transaksi tidak boleh hilang karena printer gagal;
+- printer failure dicatat;
+- retry tidak membuat sale baru;
+- print log status benar.
+
+Test yang sudah ada:
+- `kegagalan printer tidak menghapus transaksi`.
+
+Tambahan:
+- retry menghasilkan log tambahan yang benar;
+- duplicate request tidak duplicate sale;
+- gateway exception sanitized;
+- printer settings snapshot.
+
+16.4 Device matrix
+------------------
+Minimal 2 printer/model bila tersedia.
+Catat:
+- model;
+- firmware;
+- connection type;
+- paper;
+- hasil.
+
+======================================================================
+17. TAHAP PERFORMANCE DAN LOAD TEST
+======================================================================
+
+Status:
+[BELUM]
+
+17.1 Dataset
+------------
+Buat deterministic seed untuk test/profile:
+- 100 kategori;
+- 10.000 produk;
+- 100.000 sales;
+- 300.000 sale items;
+- stock movements;
+- audit logs;
+- 20 user.
+
+Jangan menjalankan load seed pada unit test biasa.
+
+17.2 Target pengukuran
+----------------------
+Ukur di device release/profile:
+- cold startup;
+- login PBKDF2;
+- load catalog;
+- search product;
+- add to cart;
+- checkout;
+- history load;
+- report harian/bulanan;
+- user management;
+- migration besar;
+- backup.
+
+Tetapkan target realistis setelah baseline, contoh:
+- UI action umum < 300 ms;
+- catalog initial < 2 s;
+- checkout DB < 1 s tanpa printer;
+- login PBKDF2 acceptable pada device target.
+
+Jangan mengurangi iterasi hash tanpa benchmark dan threat review.
+
+17.3 Query/index
+----------------
+Gunakan EXPLAIN QUERY PLAN untuk query lambat.
+Tambah index hanya bila dibutuhkan.
+Test ordering/pagination setelah index.
+
+17.4 Memory
+-----------
+- image cache;
+- large report;
+- long list;
+- controller dispose;
+- provider dispose;
+- dialog;
+- repeated login/logout.
+
+======================================================================
+18. TAHAP UX, RESPONSIVE, ACCESSIBILITY
+======================================================================
+
+Status:
+[SEBAGIAN]
+
+18.1 Screen sizes
+-----------------
+Uji:
+- tablet landscape;
+- tablet portrait;
+- phone kecil jika didukung;
+- 900px rail boundary;
+- 1200px extended rail;
+- keyboard terbuka;
+- text scale 1.3/1.5/2.0;
+- dialog tidak overflow.
+
+18.2 Accessibility
+------------------
+- semantic labels;
+- tooltip;
+- tap target;
+- focus traversal;
+- keyboard navigation untuk desktop bila target;
+- contrast;
+- status tidak hanya warna;
+- error dekat field;
+- loading announced.
+
+18.3 Empty/loading/error
+------------------------
+Setiap module:
+- initial loading;
+- refresh;
+- empty;
+- recoverable error;
+- retry;
+- offline (meski app offline, hardware/storage errors);
+- permission denied.
+
+18.4 Destructive confirmation
+-----------------------------
+Konfirmasi:
+- cancel transaction;
+- deactivate cashier;
+- restore backup;
+- reset data;
+- delete image;
+- replace license.
+
+Harus menyebut dampak dan target.
+
+18.5 Tests
+----------
+- widget sizes;
+- textScaleFactor;
+- keyboard/focus;
+- semantics tester;
+- dialog scroll;
+- no RenderFlex overflow;
+- snapshots/golden optional.
+
+======================================================================
+19. TAHAP LICENSE MANAGER YANG MASIH TERSISA
+======================================================================
+
+Status dari handoff lama:
+- issuance, renewal, registry, history, key secure storage sudah bekerja;
+- pekerjaan tersisa terutama backup, audit, device replacement, reminder, dan
+  release hardening.
+
+19.1 Backup/restore registry
+----------------------------
+Backup:
+- AdminStores;
+- AdminLicenses;
+- metadata schema;
+- checksum;
+- optional encryption.
+
+Restore:
+- validate format;
+- detect duplicate license/store;
+- preserve relationships:
+    supersedesLicenseId
+    replacedByLicenseId
+- rollback on failure;
+- no partial restore.
+
+Tests:
+- round trip;
+- empty;
+- large registry;
+- duplicates;
+- corrupt;
+- relationship integrity;
+- schema upgrade;
+- restore failure.
+
+19.2 Backup private key terenkripsi
+-----------------------------------
+Release blocker untuk operasi jangka panjang.
+
+Requirements:
+- private key tidak ditampilkan;
+- export hanya setelah explicit authentication;
+- encrypted offline backup;
+- strong KDF;
+- integrity/authentication;
+- confirm fingerprint before import;
+- import tidak otomatis overwrite key aktif;
+- recovery rehearsal.
+
+Tests:
+- correct password;
+- wrong password;
+- tampered backup;
+- wrong algorithm/version;
+- fingerprint mismatch;
+- overwrite protection;
+- no secret in logs.
+
+Jangan pernah memasukkan sample private key produksi ke test.
+Gunakan generated test key.
+
+19.3 Device replacement workflow
+--------------------------------
+Kasus:
+- tablet toko rusak;
+- installation ID berubah;
+- lisensi lama terikat perangkat.
+
+Workflow perlu:
+- identify store/license;
+- mark replacement reason;
+- issue replacement token;
+- link old/new license;
+- optional revoke old license pada registry;
+- no promise real-time revocation untuk app offline;
+- audit event;
+- user instruction.
+
+Tests:
+- replacement valid;
+- wrong store;
+- wrong request code;
+- old/new relationship;
+- duplicate replacement;
+- history;
+- store activation on new device;
+- old token behavior documented.
+
+19.4 Expiry reminder/filter/export
+----------------------------------
+- filter expiring 7/30/60 days;
+- sort;
+- renewal status;
+- export metadata default tanpa token;
+- CSV/JSON;
+- timezone/date correctness.
+
+Tests:
+- boundary date;
+- expired;
+- renewed;
+- replacement;
+- no token field default.
+
+19.5 License manager audit log
+------------------------------
+Log:
+- issuance;
+- renewal;
+- replacement;
+- key import;
+- key deletion;
+- backup;
+- restore.
+
+Never log:
+- private key;
+- full token;
+- passwords.
+
+19.6 App lock / biometric
+-------------------------
+Karena aplikasi memegang akses ke private key:
+- app lock PIN/biometric;
+- timeout;
+- lifecycle lock;
+- screenshot protection;
+- clipboard clearing;
+- no sensitive preview.
+
+Tests:
+- locked startup;
+- unlock;
+- failed attempts;
+- background/resume;
+- secure screen flag;
+- key operation denied while locked.
+
+19.7 Release signing
+--------------------
+- separate package;
+- release keystore;
+- no debug;
+- backup disabled;
+- secrets excluded;
+- verify APK contents;
+- obfuscation optional;
+- internal distribution only.
+
+======================================================================
+20. TAHAP LICENSE VALIDATION EDGE CASES
+======================================================================
+
+Status:
+[SEBAGIAN SUDAH DIUJI, PERLU RELEASE MATRIX]
+
+Audit/test:
+- invalid signature;
+- wrong app ID;
+- wrong installation;
+- unsupported schema;
+- not yet valid;
+- expired;
+- replacement invalid tidak menimpa valid.
+
+Tambahan release tests:
+- device clock mundur;
+- clock maju jauh;
+- timezone change;
+- expiry boundary exact;
+- corrupted secure storage;
+- token truncated;
+- token with whitespace;
+- installation identity missing;
+- secure storage unavailable;
+- license remains across app update;
+- database restore does not silently clone license.
+
+Keputusan perlu:
+- apakah ada grace period;
+- pesan expiry;
+- akses data setelah expiry;
+- export/backup masih boleh saat expired;
+- emergency read-only mode.
+
+Jangan mengubah kebijakan lisensi tanpa update kedua aplikasi dan protocol test.
+
+======================================================================
+21. TAHAP ANDROID SECURITY HARDENING
+======================================================================
+
+Status:
+[BELUM DIAUDIT FINAL]
+
+21.1 Manifest
+-------------
+Audit kasir_offline dan license_manager:
+- android:allowBackup;
+- fullBackupContent/dataExtractionRules;
+- exported activities/services/receivers;
+- internet permission jika tidak perlu;
+- Bluetooth permissions;
+- storage permissions;
+- cleartext traffic;
+- package visibility;
+- file provider;
+- debug flags.
+
+Recommended:
+- license manager allowBackup=false;
+- POS backup OS perlu keputusan karena license/device binding dan DB;
+- lebih aman memakai backup internal app yang terkontrol.
+
+21.2 Logging
+------------
+Search:
+    print(
+    debugPrint(
+    log(
+    logger
+    token
+    pin
+    hash
+    salt
+    privateKey
+
+Release:
+- tidak log secret;
+- stack trace user-facing disanitasi;
+- debug-only logs guarded;
+- crash reporting privacy-safe bila ditambah.
+
+21.3 Secure storage
+-------------------
+- validate error handling;
+- no fallback plaintext;
+- key alias stable;
+- app update persistence;
+- uninstall behavior documented;
+- device restore behavior documented.
+
+21.4 Release keystore
+---------------------
+Untuk tiap app:
+- keystore terpisah;
+- password tidak di repo;
+- key.properties ignored;
+- backup terenkripsi;
+- fingerprint dicatat;
+- release signing verified.
+
+21.5 Obfuscation
+----------------
+Opsional:
+    flutter build apk --release --obfuscate --split-debug-info=<secure_dir>
+
+Jika dipakai:
+- simpan symbol files aman;
+- uji stack trace;
+- jangan anggap obfuscation sebagai security boundary.
+
+======================================================================
+22. TAHAP BUILD, VERSIONING, DAN CI
+======================================================================
+
+Status:
+[BELUM TERKONFIRMASI]
+
+22.1 Versioning
+---------------
+Tetapkan:
+- semantic version aplikasi;
+- Android versionCode monoton;
+- schemaVersion terpisah;
+- license protocol schema terpisah;
+- backup format version terpisah.
+
+Jangan menyamakan semua version.
+
+22.2 Build clean
+----------------
+Sebelum RC:
+    flutter clean
+    flutter pub get
+    dart run build_runner build
+    flutter analyze
+    flutter test
+
+Build:
+    flutter build apk --release
+atau:
+    flutter build appbundle --release
+
+Untuk internal sideload:
+- APK universal atau split ABI sesuai distribusi.
+
+22.3 Artifact verification
+--------------------------
+- install artifact release, bukan `flutter run`;
+- verify signature;
+- SHA-256 checksum;
+- file name berisi app/version/build;
+- archive release notes;
+- archive migration snapshots;
+- jangan archive secret ke folder publik.
+
+22.4 CI recommended
+-------------------
+Pipeline:
+1. checkout;
+2. Flutter pinned;
+3. pub get;
+4. format check;
+5. analyze;
+6. tests;
+7. generated files consistency;
+8. build unsigned/test artifact;
+9. optional signed build pada secure runner.
+
+CI tidak boleh memiliki private license signing key kecuali secure controlled
+environment benar-benar diperlukan. License manager private key produksi lebih
+baik tidak dipakai CI.
+
+22.5 Generated consistency
+--------------------------
+CI check:
+- source schema berubah tetapi snapshot tidak;
+- generated file stale;
+- migration matrix gagal;
+- dirty git setelah generation.
+
+======================================================================
+23. TAHAP FULL QA / UAT MATRIX
+======================================================================
+
+Status:
+[BELUM FINAL]
+
+23.1 Fresh install POS
+----------------------
+1. Install release APK.
+2. License activation.
+3. Welcome.
+4. Setup toko.
+5. Buat Manager.
+6. Login Manager.
+7. Buat kategori/produk.
+8. Stock.
+9. Buat Kasir.
+10. Logout.
+11. Login Kasir.
+12. Checkout cash/non-cash.
+13. Print.
+14. Logout.
+15. Login Manager.
+16. History.
+17. Cancel.
+18. Report.
+19. User deactivate/reactivate/reset PIN.
+20. Restart.
+21. Data/license/session behavior benar.
+
+23.2 Existing installation upgrade
+----------------------------------
+Wajib memiliki fixture/device untuk:
+- schema 7;
+- schema 8;
+- schema 9 jika final lebih tinggi;
+- final-1 version.
+
+Checklist:
+- install old APK/data;
+- isi store/product/sale/license;
+- upgrade APK;
+- migration;
+- startup recovery bila schema 7 tanpa users;
+- existing schema 8 users tetap;
+- license tidak hilang;
+- printer settings;
+- receipt design;
+- images;
+- transaction history;
+- audit logs.
+
+23.3 Role matrix
+----------------
+Manager:
+- semua fitur yang ditetapkan;
+- cancel;
+- stock;
+- users;
+- license/settings.
+
+Kasir:
+- allowed menu;
+- checkout;
+- history read;
+- denied direct repository sensitive actions melalui tests.
+
+23.4 Negative paths
+-------------------
+- wrong PIN;
+- repeated wrong PIN;
+- inactive account;
+- missing store;
+- no active user;
+- invalid license;
+- expired license;
+- corrupt token;
+- duplicate PIN;
+- printer failure;
+- storage full;
+- database locked;
+- image missing;
+- backup corrupt;
+- restore interrupted;
+- app killed during checkout;
+- app killed during cancellation;
+- power loss simulation sejauh mungkin.
+
+23.5 Long-running
+-----------------
+- 100 checkout;
+- repeated login/logout;
+- repeated printer retry;
+- background/resume;
+- memory;
+- no duplicate transaction;
+- no stale provider/session.
+
+23.6 UAT sign-off
+-----------------
+Gunakan checklist dengan:
+- build version;
+- device;
+- tester;
+- date;
+- scenario;
+- expected;
+- actual;
+- evidence;
+- pass/fail;
+- defect ID.
+
+======================================================================
+24. TAHAP DOKUMENTASI OPERASIONAL
+======================================================================
+
+Status:
+[BELUM FINAL]
+
+24.1 Manual toko
+----------------
+- install;
+- activation;
+- setup;
+- Manager PIN;
+- create Cashier;
+- product/stock;
+- checkout;
+- print;
+- history/cancel;
+- report;
+- backup;
+- restore;
+- update app;
+- troubleshooting.
+
+24.2 Manual Super Admin
+-----------------------
+- key setup;
+- fingerprint verification;
+- activation request;
+- issuance;
+- renewal;
+- replacement;
+- history;
+- registry backup;
+- private key encrypted backup;
+- restore rehearsal;
+- incident.
+
+24.3 SOP secret
+---------------
+- siapa boleh akses;
+- media backup;
+- lokasi backup;
+- frequency;
+- recovery test schedule;
+- lost key response;
+- compromised key response;
+- rotation plan.
+
+24.4 Release notes
+------------------
+- version;
+- features;
+- schema migration;
+- compatibility;
+- known limitations;
+- backup recommendation;
+- upgrade steps;
+- rollback policy.
+
+24.5 Privacy/data
+-----------------
+Dokumentasikan:
+- data disimpan lokal;
+- data apa yang disimpan;
+- PIN di-hash;
+- license device binding;
+- backup responsibility;
+- support access.
+
+======================================================================
+25. RELEASE CANDIDATE CHECKLIST
+======================================================================
+
+RC tidak boleh dibuat sebelum:
+[ ] semua release blocker selesai;
+[ ] schema final stabil;
+[ ] migration snapshots lengkap;
+[ ] migration matrix hijau;
+[ ] data-integrity tests hijau;
+[ ] analyzer hijau;
+[ ] full tests hijau;
+[ ] fresh device test hijau;
+[ ] upgrade device test hijau;
+[ ] printer nyata hijau;
+[ ] backup/restore hijau atau secara eksplisit dikeluarkan dari V1 dengan
+    risiko diterima;
+[ ] private key backup rehearsal selesai;
+[ ] release signing siap;
+[ ] no secret scan bersih;
+[ ] versionCode/versionName benar;
+[ ] release notes siap;
+[ ] user manual siap;
+[ ] SHA-256 artifact dicatat;
+[ ] rollback plan tersedia.
+
+Perintah RC POS:
+    cd C:\Development\projects\kasir_offline
+    git status --short
+    dart format --output=none --set-exit-if-changed lib test
+    flutter analyze
+    flutter test
+    flutter build apk --release
+
+Perintah RC License Manager:
+    cd C:\Development\projects\kasir_license_manager
+    git status --short
+    dart format --output=none --set-exit-if-changed lib test
+    flutter analyze
+    flutter test
+    flutter build apk --release
+
+Setelah build:
+- install kedua APK release;
+- ulang smoke test;
+- jangan hanya percaya debug build.
+
+======================================================================
+26. RELEASE BLOCKER VS DAPAT DITUNDA
+======================================================================
+
+26.1 Release blocker recommended
+--------------------------------
+1. Persistent actor identity checkout/cancellation.
+2. Stock authorization memakai session.
+3. Hapus Admin legacy dari jalur produksi.
+4. Repository/service authorization guards.
+5. Migration/data-integrity final.
+6. Device upgrade test.
+7. Login brute-force minimum protection.
+8. Backup private key license manager.
+9. Registry backup.
+10. Release signing.
+11. No-secret audit.
+12. Full RC device test.
+13. Dokumentasi activation/recovery.
+14. Keputusan backup data POS yang eksplisit.
+
+26.2 Dapat ditunda ke V1.1 bila dicatat
+---------------------------------------
+- multi Manager;
+- biometric POS;
+- advanced audit filtering;
+- encrypted POS backup jika V1 memiliki backup lokal terbatas dan SOP kuat;
+- online revocation;
+- remote sync/cloud;
+- advanced analytics;
+- golden tests luas;
+- CI signed build;
+- obfuscation;
+- crash reporting eksternal;
+- 80mm printer jika target hanya 58mm.
+
+26.3 Tidak boleh dijanjikan tanpa implementasi
+----------------------------------------------
+- real-time license revocation pada app offline;
+- anti-tamper absolut;
+- data tidak mungkin hilang;
+- PIN tidak mungkin brute-forced;
+- restore lintas device tanpa license replacement;
+- zero-downtime migration tanpa test.
+
+======================================================================
+27. KATALOG TEST YANG SUDAH ADA / PERNAH DISEBUT
+======================================================================
+
+Core/setup/auth:
+- widget_test.dart
+- setup_repository_test.dart
+- setup_store_id_test.dart
+- initial_manager_account_input_test.dart
+- initial_setup_coordinator_test.dart
+- initial_setup_manager_page_test.dart
+- app_user_table_test.dart
+- pin_hash_service_test.dart
+- app_user_repository_test.dart
+- login_view_model_test.dart
+- login_page_test.dart
+- login_shell_flow_test.dart
+- manager_role_access_test.dart
+- manager_recovery_startup_test.dart
+- manager_recovery_coordinator_test.dart
+- manager_recovery_view_model_test.dart
+- manager_recovery_page_test.dart
+- user_management_repository_test.dart
+- user_management_view_model_test.dart
+- user_management_page_test.dart
+
+Migration:
+- test/drift/kasir_database/migration_test.dart
+- test/drift/kasir_database/migrated_recovery_flow_test.dart
+- generated schema tests v1-v8 saat status terverifikasi.
+
+Sales/history/report/stock:
+- sale_repository_test.dart
+- cashier_view_model_test.dart
+- sale_history_repository_test.dart
+- sale_cancellation_repository_test.dart
+- transaction_history_view_model_test.dart
+- transaction_history_page_test.dart
+- sales_report_repository_test.dart
+- stock_repository_test.dart
+- printer/product/category tests.
+
+Printer:
+- receipt_printer_service_test.dart
+- printer settings/design tests yang ada di project.
+
+License POS:
+- activation_page_test.dart
+- license_access_test.dart
+- license_foundation_test.dart
+- license_gate_test.dart
+- license_info_page_test.dart
+- license_info_view_model_test.dart
+- license_issuer_tool_test.dart
+- license_registry_tool_test.dart
+- license_validation_test.dart
+- app_startup_license_message_test.dart
+- license_replacement_safety_test.dart
+- helpers/fake_license_key_value_store.dart
+- helpers/license_test_support.dart
+
+Chat baru harus menginventaris ulang seluruh `test\*.dart` karena daftar ini
+bukan jaminan lengkap setelah perubahan berikutnya.
+
+======================================================================
+28. TEMPLATE PROTOKOL UNTUK SETIAP BATCH
+======================================================================
+
+A. Audit
+--------
+- source;
+- usages;
+- tests;
+- schema;
+- providers;
+- baseline.
+
+B. Definisi selesai
+-------------------
+Tulis sebelum coding:
+- perilaku positif;
+- negative paths;
+- data yang harus tidak berubah;
+- test yang harus ditambah.
+
+C. Implementasi
+---------------
+Urutan:
+1. domain/model;
+2. repository/service;
+3. ViewModel;
+4. UI/wiring;
+5. generated/migration bila perlu;
+6. tests.
+
+D. Test
+-------
+    dart format <files>
+    flutter test <target> --reporter expanded
+    flutter test <related> --reporter expanded
+    flutter analyze
+    flutter test
+
+E. Device
+---------
+- happy path;
+- restart;
+- negative;
+- upgrade;
+- permission/hardware.
+
+F. Handoff checkpoint
+---------------------
+Catat:
+- file berubah;
+- test count;
+- error/fix;
+- schema;
+- next batch.
+
+======================================================================
+29. PROMPT SIAP TEMPEL UNTUK CHAT BARU
+======================================================================
+
+Gunakan prompt berikut bersama file ini:
+
+----------------------------------------------------------------------
+Saya melanjutkan proyek Flutter `kasir_offline` dan
+`kasir_license_manager`. Baca file handoff TXT yang saya unggah sebagai sumber
+utama. Gunakan bahasa Indonesia.
+
+Aturan kerja:
+- audit source aktual sebelum patch;
+- jangan menebak struktur;
+- gunakan satu AppDatabase;
+- jangan edit *.g.dart/generated secara manual;
+- jangan hapus migration lama;
+- jangan minta/lihat private key;
+- batch 3–5 checkpoint yang masih satu domain;
+- targeted test -> regression -> flutter analyze -> full flutter test ->
+  device/negative path;
+- bila gagal, debug error pertama saja.
+
+Status penting:
+- login, Manager recovery, session uid/storeId, user management repository,
+  ViewModel, halaman Akun, navigasi, dan test sudah selesai;
+- full flutter test terakhir dilaporkan hijau;
+- status schema terakhir yang terverifikasi adalah schema 8;
+- batch schema 9 persistent actor identity sudah dirancang tetapi belum
+  dikonfirmasi dijalankan.
+
+Tugas pertama:
+1. audit apakah schema 9 sudah diterapkan sebagian atau belum;
+2. jalankan baseline migration/login/user-management;
+3. bila masih schema 8, lanjutkan Batch persistent actor identity sesuai
+   handoff;
+4. jangan mengubah subsistem lisensi yang sudah stabil.
+----------------------------------------------------------------------
+
+======================================================================
+30. RINGKASAN URUTAN PRAKTIK SAMPAI RELEASE
+======================================================================
+
+Urutan recommended:
+
+FASE A — Tutup auth/actor identity
+1. Audit status aktual.
+2. Schema 9 actor UID.
+3. Checkout session guard.
+4. Cancellation Manager guard.
+5. Stock session guard.
+6. Authorization boundary audit.
+7. Hapus Admin legacy.
+8. Account lifecycle.
+9. Login hardening.
+
+FASE B — Data/reliability
+10. Audit log completeness.
+11. POS backup/restore.
+12. Database integrity/maintenance.
+13. Time/numbering/file cleanup.
+14. Printer/hardware matrix.
+15. Performance/load.
+16. UX/accessibility.
+
+FASE C — License manager operations
+17. Registry backup/restore.
+18. Encrypted private-key backup.
+19. Device replacement.
+20. Expiry reminder/export.
+21. License manager audit.
+22. App lock/screenshot protection.
+
+FASE D — Release engineering
+23. Android security audit.
+24. Versioning/signing.
+25. CI/generated consistency.
+26. Full QA/UAT.
+27. Documentation/SOP.
+28. Release candidate.
+29. Release artifact smoke test.
+30. Production release dan post-release monitoring.
+
+======================================================================
+31. GO / NO-GO
+======================================================================
+
+GO hanya jika:
+- tidak ada known data-loss blocker;
+- migration old -> final teruji;
+- license survives supported upgrade;
+- role guard ada di business layer;
+- private key backup teruji;
+- release APK ter-sign dan ter-install;
+- test suite + analyzer hijau;
+- UAT device selesai;
+- SOP tersedia.
+
+NO-GO jika:
+- schema generated/migration tidak sinkron;
+- full test merah;
+- private key hanya ada satu copy tanpa backup;
+- existing installation dapat terkunci;
+- Cashier dapat memanggil operasi Manager melalui repository;
+- upgrade menghapus license/data;
+- backup/restore belum ada dan risiko belum diterima secara tertulis;
+- release masih memakai debug signing;
+- secret ditemukan di repo/log/artifact.
+
+======================================================================
+AKHIR DOKUMEN
+======================================================================
