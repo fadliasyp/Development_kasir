@@ -246,6 +246,8 @@ AI pada **laptop baru** wajib melakukan ini sebelum melanjutkan batch fitur:
   berhasil ringkas/dapat digulir tanpa menutupi isi atau tombol. Analyzer, 693
   test, build, checksum, instalasi, dan smoke startup lulus; gerbang scan QR nyata
   serta pembayaran QRIS perangkat masih menunggu.
+- Batch 9 export Excel selesai; pengguna mengonfirmasi pada 17 November 2026
+  bahwa file dan seluruh sheet dapat dibuka serta hasilnya sesuai.
 - Tahap 21-25: belum selesai.
 
 Perkiraan saat ini tersisa **5-8 batch** sampai production/publish:
@@ -2240,25 +2242,51 @@ Checkpoint implementasi Batch 9 pada 30 September 2026:
   lokal/perangkat identik:
   `91f75b72b7690fdcfcfefbbd4d2fd3a8f1a5253ab5b0bb13775a6b8521f4f1eb`.
 
-Gerbang manual Batch 9 yang masih terbuka: sebagai Manager buka **Laporan
-Excel**, pilih rentang yang berisi transaksi, tekan **Buat & Simpan Excel**,
-simpan sebagai **file baru** melalui dialog sistem, lalu buka file baru tersebut
-di aplikasi spreadsheet pada HP (file lama tidak berubah setelah hotfix).
-Bandingkan omzet/jumlah transaksi dengan Dashboard atau Riwayat dan periksa
-sheet Transaksi, Item, Pembayaran, Promo, serta Shift. Setelah file nyata dapat
-dibuka dan angka cocok, Batch 9 dinyatakan selesai dan lanjut Batch 10A.
+Gerbang manual Batch 9 dinyatakan **lulus oleh pengguna pada 17 November 2026**:
+file Excel berhasil dibuat dan dibuka, seluruh sheet sesuai, serta hasilnya
+cocok. Batch 9 selesai; pekerjaan berlanjut ke Batch 10A.
 
 #### Batch 10 - Rekonsiliasi schema dan regresi operasional
 
 - **Batch 10A - Freeze schema dan migrasi:** bekukan schema fitur Tahap 20B-20C,
   regenerasi Drift/migration snapshot, dan pastikan upgrade seluruh versi lama ke
   versi final menjaga data.
+
+Checkpoint Batch 10A pada 17 November 2026 (gerbang analyzer penuh terbuka):
+snapshot Drift v24 dan helper migrasi telah diregenerasi. Uji migrasi 107/107
+lulus. Snapshot historis v1-v13 diuji langsung ke v24; database v14-v22 dibuat
+melalui migrasi bertahap dari v13, lalu tiap versi dinaikkan ke v24 dengan data
+toko/pengaturan tetap ada. Fixture v23 ke v24 juga menjaga data. Seluruh test
+aplikasi sebelum sembilan kasus perantara terakhir lulus 715/715; sembilan kasus
+baru lulus pada suite migrasi. Analyzer file yang berubah bersih, tetapi
+analyzer penuh pada Flutter SDK laptop baru menghasilkan 76 info deprecation
+`flutter/material.dart`. Batch 10A belum ditutup sampai gerbang analyzer penuh
+diselaraskan dengan toolchain yang dipakai untuk rilis.
 - **Batch 10B - Backup otomatis tahan uninstall:** Manager memilih folder publik
   melalui dialog folder sistem. Aplikasi membuat backup atomik setelah tutup
   shift dan paling banyak sekali per hari, menyimpan beberapa generasi (target
   awal 7 harian dan 4 mingguan), serta menampilkan waktu/status backup terakhir
   dan peringatan jika backup terlambat. Backup tidak boleh hanya berada di
   penyimpanan private atau `Android/data` yang ikut terhapus saat uninstall.
+
+Checkpoint awal Batch 10B pada 17 November 2026 (belum selesai): jalur ekspor
+manual ke Download publik yang sebelumnya memanggil channel Android tanpa
+handler telah diberi implementasi MediaStore pada Android 10 ke atas dan
+pemilih file sistem pada versi lebih lama. Penyalinan berjalan di thread latar;
+file MediaStore ditahan sebagai pending sampai salinan selesai. Build APK masih
+tertahan oleh setup laptop baru: Flutter 3.50 meminta Gradle minimal 9.3.1
+sedangkan wrapper proyek 9.1.0; setelah pemeriksaan versi dilewati dan NDK
+28.2.13676358 dipasang, unduhan plugin Android Gradle 8.13.1 sempat gagal.
+Percobaan berikutnya terhenti karena drive C kehabisan ruang saat Gradle menulis
+cache. HP akhirnya terdeteksi ADB sebagai `device`, tetapi APK baru belum dapat
+dibuild atau dipasang. Folder pilihan Manager, jadwal backup, retensi, status,
+dan uji perangkat belum dikerjakan.
+
+Sebagai jalur build tanpa cache laptop, branch POS `ci/cloud-apk` telah dipush
+ke GitHub. Branch ini memperbarui wrapper ke Gradle 9.3.1 dan menambahkan
+workflow GitHub Actions yang menjalankan test lalu membangun APK profile arm64
+dengan ID paket `.ci` terpisah. Artifact dan pemasangan perangkat masih
+menunggu hasil workflow; APK uji ini tidak menggantikan instalasi POS toko.
 - **Batch 10C - Disaster recovery/fresh install:** setelah aktivasi lisensi,
   onboarding menyediakan pilihan **Pulihkan Toko dari Backup** sebelum membuat
   setup/Manager baru. Restore memverifikasi checksum, versi schema, ruang kosong,

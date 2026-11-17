@@ -7299,8 +7299,6 @@ bersih, dan APK hotfix terpasang sebagai update tanpa menghapus data dengan
 SHA-256 lokal/perangkat identik:
 `91f75b72b7690fdcfcfefbbd4d2fd3a8f1a5253ab5b0bb13775a6b8521f4f1eb`.
 
-Gerbang manual Batch 9: buka menu **Laporan Excel** sebagai Manager, pilih
-periode yang berisi transaksi, simpan sebagai file baru melalui dialog sistem,
-buka file baru itu di aplikasi spreadsheet HP, lalu cocokkan ringkasan dengan Dashboard/Riwayat serta
-periksa seluruh sheet. Setelah file nyata terbuka dan angkanya cocok, Batch 9
-siap ditutup dan pekerjaan berlanjut ke Batch 10A.
+Gerbang manual Batch 9 dinyatakan **lulus oleh pengguna pada 17 November 2026**:
+file Excel berhasil dibuat dan dibuka, seluruh sheet sesuai, serta hasilnya
+cocok. Batch 9 selesai; pekerjaan berlanjut ke Batch 10A.
